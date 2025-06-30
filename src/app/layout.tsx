@@ -1,12 +1,12 @@
-'use client';
-import { usePathname } from 'next/navigation';
-import { useEffect } from 'react';
+"use client";
+import { usePathname } from "next/navigation";
+import { useEffect } from "react";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { SidebarNav } from "@/components/ui/sidebar-nav";
 import { Topbar } from "@/components/ui/topbar";
 import { AuthProvider } from "@/contexts/AuthContext";
-import { AuthGuard } from '@/components/auth/AuthGuard';
+import { AuthGuard } from "@/components/auth/AuthGuard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -24,7 +24,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   const pathname = usePathname();
-  const isPublicRoute = pathname === '/login';
+  const isPublicRoute = pathname === "/login";
 
   useEffect(() => {
     document.title = "Academia Bespoke | Admin";

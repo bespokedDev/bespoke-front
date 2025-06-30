@@ -1,5 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-// En: app/students/page.tsx"use client";
+"use client";
 
 import { useState, useEffect } from "react";
 import { apiClient } from "@/lib/api";
