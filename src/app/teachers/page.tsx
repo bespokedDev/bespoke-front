@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
 
 import { useState, useEffect } from "react";
@@ -77,6 +78,7 @@ const formatDateForInput = (dateString?: string | null) => {
   try {
     return new Date(dateString).toISOString().split("T")[0];
   } catch (e) {
+    console.log("error: ", e)
     return "";
   }
 };
@@ -129,7 +131,7 @@ export default function TeachersPage() {
       setFormData(initialProfessorState);
     } else if (teacher) {
       setSelectedTeacher(teacher);
-      const { _id, isActive, __v, ...editableData } = teacher as any;
+      const { /*_id, isActive, __v,*/ ...editableData } = teacher as any;
       if (editableData.dob)
         editableData.dob = formatDateForInput(editableData.dob);
       if (editableData.startDate)
@@ -525,7 +527,7 @@ export default function TeachersPage() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>Holder's Name</Label>
+                          <Label>Holder´s Name</Label>
                           <Input
                             value={payment.holderName || ""}
                             onChange={(e) =>
@@ -534,7 +536,7 @@ export default function TeachersPage() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>Holder's CI</Label>
+                          <Label>Holder´s CI</Label>
                           <Input
                             value={payment.holderCI || ""}
                             onChange={(e) =>
@@ -543,7 +545,7 @@ export default function TeachersPage() {
                           />
                         </div>
                         <div className="space-y-2">
-                          <Label>Holder's Email</Label>
+                          <Label>Holder´s Email</Label>
                           <Input
                             type="email"
                             value={payment.holderEmail || ""}

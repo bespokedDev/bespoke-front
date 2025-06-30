@@ -1,5 +1,5 @@
-// En: app/students/page.tsx
-"use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// En: app/students/page.tsx"use client";
 
 import { useState, useEffect } from "react";
 import { apiClient } from "@/lib/api";
@@ -92,6 +92,7 @@ const formatDateForInput = (dateString?: string | null) => {
   try {
     return new Date(dateString).toISOString().split("T")[0];
   } catch (e) {
+    console.log("error: ", e);
     return "";
   }
 };

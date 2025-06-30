@@ -2,9 +2,7 @@
 
 import { SummaryCard } from "@/components/dashboard/SummaryCard";
 import { AnalyticsChart } from "@/components/dashboard/AnalyticsChart";
-import { PlanDistributionChart } from "@/components/dashboard/PlanDistributionChar";
 import { AssignmentsTable } from "@/components/dashboard/AssignmentsTable";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { PageHeader } from "@/components/ui/page-header";
 
 export default function HomePage() {
