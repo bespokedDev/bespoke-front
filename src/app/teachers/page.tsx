@@ -254,7 +254,6 @@ export default function TeachersPage() {
     { accessorKey: "name", header: "Name" },
     { accessorKey: "email", header: "Email" },
     { accessorKey: "phone", header: "Phone" },
-    { accessorKey: "occupation", header: "Occupation" },
     {
       accessorKey: "isActive",
       header: "Status",
@@ -422,7 +421,6 @@ export default function TeachersPage() {
                     name="address"
                     value={formData.address || ""}
                     onChange={handleFormChange}
-                    required
                   />
                 </div>
                 <div className="space-y-2">
@@ -432,7 +430,6 @@ export default function TeachersPage() {
                     name="occupation"
                     value={formData.occupation || ""}
                     onChange={handleFormChange}
-                    required
                   />
                 </div>
                 <div className="space-y-2">
@@ -547,7 +544,6 @@ export default function TeachersPage() {
                         <div className="space-y-2">
                           <Label>Holder´s Email</Label>
                           <Input
-                            type="email"
                             value={payment.holderEmail || ""}
                             onChange={(e) =>
                               handlePaymentDataChange(e, index, "holderEmail")

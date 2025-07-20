@@ -18,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea"; // Importar Textarea
+import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -27,7 +27,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DataTable } from "@/components/ui/data-table";
-import { Plus, Ban, CheckCircle2, Loader2, FileDown } from "lucide-react";
+import {
+  Plus,
+  Ban,
+  CheckCircle2,
+  Loader2,
+  FileDown,
+  Trash2,
+} from "lucide-react";
 import {
   Table,
   TableBody,
@@ -37,7 +44,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 
-// --- DEFINICIONES DE TIPOS ---
+// --- Declaración de Tipos para jsPDF ---
+declare module "jspdf" {
+  interface jsPDF {
+    autoTable: (options: any) => jsPDF;
+  }
+}
+
+// --- DEFINICIONES DE TIPOS (ACTUALIZADAS) ---
 interface PaymentMethod {
   _id: string;
   bankName: string;
@@ -65,20 +79,29 @@ interface Enrollment {
   isActive: boolean;
   enrollmentType: "single" | "couple" | "group";
 }
-interface PayoutDetailInput {
-  enrollmentId: string;
-  hoursTaught: number;
-  payPerHour: number;
-  totalPerEnrollment: number;
+
+// Nuevo tipo para los detalles del payout en el estado del formulario
+interface PayoutDetail {
+  id: string; // ID temporal para el estado de React
+  status: 1 | 2; // 1 para enrollment, 2 para bono/otro
+  enrollmentId: string | null;
+  hoursTaught: number | null;
+  payPerHour: number | null;
+  totalPerEnrollment: number | null;
+  description: string | null;
+  amount: number | null;
 }
+
 interface Payout {
   _id: string;
   professorId: Professor;
   month: string;
   details: Array<{
-    enrollmentId: Enrollment;
-    hoursTaught: number;
-    totalPerStudent: number;
+    enrollmentId?: Enrollment;
+    description?: string;
+    hoursTaught?: number;
+    totalPerStudent?: number;
+    amount?: number;
   }>;
   subtotal: number;
   discount: number;
@@ -92,11 +115,11 @@ interface Payout {
 type PayoutFormData = {
   professorId: string;
   month: string;
-  details: PayoutDetailInput[];
+  details: PayoutDetail[];
   discount: number;
   paymentMethodId: string;
   paidAt: string;
-  notes?: string; // Añadido campo de notas
+  notes?: string;
 };
 
 // --- ESTADO INICIAL ---
@@ -109,10 +132,10 @@ const initialPayoutState: PayoutFormData = {
   discount: 0,
   paymentMethodId: "",
   paidAt: new Date().toISOString().split("T")[0],
-  notes: "", // Añadido campo de notas
+  notes: "",
 };
 
-// --- GENERADOR DE PDF (MODIFICADO) ---
+// --- GENERADOR DE PDF ---
 const generatePayoutPDF = (payout: Payout) => {
   const doc = new jsPDF();
   const paidDate = new Date(payout.paidAt).toLocaleDateString();
@@ -146,71 +169,81 @@ const generatePayoutPDF = (payout: Payout) => {
   let finalY = (doc as any).lastAutoTable.finalY + 5;
 
   doc.setFontSize(12);
+  doc.text("Breakdown", 14, finalY);
   finalY += 6;
 
-  const breakdownColumns = [
-    "Students & Plan",
-    "Type",
-    "Pay/Hour",
-    "Hours",
-    "Total",
-  ];
+  const breakdownColumns = ["Description", "Hours", "Rate", "Total"];
   const breakdownRows: any[] = [];
   payout.details.forEach((detail) => {
-    if (!detail.enrollmentId) return;
-    const students = detail.enrollmentId.studentIds
-      .map((s) => s.name)
-      .join(", ");
-    const plan = detail.enrollmentId.planId.name;
-    const type = detail.enrollmentId.enrollmentType;
-    const payPerHour =
-      detail.hoursTaught > 0 ? detail.totalPerStudent / detail.hoursTaught : 0;
-    const row = [
-      `${students} (${plan})`,
-      type,
-      `$${payPerHour.toFixed(2)}`,
-      detail.hoursTaught,
-      `$${detail.totalPerStudent.toFixed(2)}`,
-    ];
-    breakdownRows.push(row);
+    let description, hours, rate, total;
+    if (detail.enrollmentId) {
+      description = `${detail.enrollmentId.studentIds
+        .map((s) => s.name)
+        .join(", ")} (${detail.enrollmentId.planId.name})`;
+      hours = detail.hoursTaught || 0;
+      rate = hours > 0 ? (detail.totalPerStudent || 0) / hours : 0;
+      total = detail.totalPerStudent || 0;
+      breakdownRows.push([
+        description,
+        hours,
+        `$${rate.toFixed(2)}`,
+        `$${total.toFixed(2)}`,
+      ]);
+    } else {
+      description = detail.description || "N/A";
+      total = detail.amount || 0;
+      breakdownRows.push([
+        { content: description, colSpan: 3 },
+        `$${total.toFixed(2)}`,
+      ]);
+    }
   });
   autoTable(doc, {
     head: [breakdownColumns],
     body: breakdownRows,
     startY: finalY,
-    headStyles: {
-      fillColor: "#4C549E", // Color primario de tu tema
-    },
+    headStyles: { fillColor: "#4C549E" },
   });
   finalY = (doc as any).lastAutoTable.finalY;
 
-  const summaryX = 140;
+  const summaryX = 130;
+  const amountX = 195;
   doc.setFontSize(10);
   doc.text(`Subtotal:`, summaryX, finalY + 10, { align: "right" });
-  doc.text(`$${payout.subtotal.toFixed(2)}`, 190, finalY + 10, {
+  doc.text(`$${payout.subtotal.toFixed(2)}`, amountX, finalY + 10, {
     align: "right",
   });
   doc.text(`Discount:`, summaryX, finalY + 16, { align: "right" });
-  doc.text(`-$${payout.discount.toFixed(2)}`, 190, finalY + 16, {
+  doc.text(`-$${payout.discount.toFixed(2)}`, amountX, finalY + 16, {
     align: "right",
   });
   doc.setFont("helvetica", "bold");
   doc.text(`Total Paid:`, summaryX, finalY + 22, { align: "right" });
-  doc.text(`$${payout.total.toFixed(2)}`, 190, finalY + 22, { align: "right" });
+  doc.text(`$${payout.total.toFixed(2)}`, amountX, finalY + 22, {
+    align: "right",
+  });
   finalY += 30;
 
   if (paymentMethod) {
-    doc.setFontSize(10);
+    doc.setFontSize(12);
     doc.text("Paid to Account", 14, finalY);
-    finalY += 2;
+    finalY += 6;
     autoTable(doc, {
       head: [
-        ["Account Name", "Confirmation #", "Paid On", "Received By", "Date"],
+        ["Account Name", "Confirmation #", "Paid When", "Received By", "Date"],
       ],
-      headStyles: {
-        fillColor: "#4C549E", // Color primario de tu tema
-      },
-      body: [[`${paymentMethod.bankName}`, "", paidDate, "", paidDate]],
+      headStyles: { fillColor: "#4C549E" },
+      body: [
+        [
+          `${paymentMethod.bankName} (...${paymentMethod.accountNumber?.slice(
+            -4
+          )})`,
+          "",
+          paidDate,
+          "",
+          paidDate,
+        ],
+      ],
       startY: finalY,
     });
     finalY = (doc as any).lastAutoTable.finalY;
@@ -228,10 +261,8 @@ const generatePayoutPDF = (payout: Payout) => {
     finalY += notesText.length * 5;
   }
 
-  doc.setFontSize(10);
-  doc.line(190, finalY + 20, 130, finalY + 20);
-  doc.text("Signature", 170, finalY + 25, { align: "right" });
-
+  doc.line(14, finalY + 20, 80, finalY + 20);
+  doc.text("Signature", 38, finalY + 25);
   doc.save(
     `payout_${payout.professorId.name.replace(" ", "_")}_${payout.month}.pdf`
   );
@@ -264,7 +295,6 @@ export default function PayoutsPage() {
           apiClient("api/payouts"),
           apiClient("api/professors"),
         ]);
-        console.log("LA DATAAAAA", payoutData);
         setPayouts(payoutData);
         setProfessors(professorData);
       } catch (err: any) {
@@ -276,6 +306,7 @@ export default function PayoutsPage() {
     fetchInitialData();
   }, []);
 
+  // --- LÓGICA DE CÁLCULO AUTOMÁTICO (SIN MODIFICAR, SEGÚN TUS INSTRUCCIONES) ---
   useEffect(() => {
     const fetchAndProcessEnrollments = async () => {
       if (!formData.professorId) {
@@ -291,33 +322,39 @@ export default function PayoutsPage() {
           `api/professors/${formData.professorId}`
         );
         setProfessorEnrollments(enrollmentsData);
-        const initialDetails = enrollmentsData.map((enrollment: Enrollment) => {
-          const rates = professorData.typeId?.rates;
-          let payPerHour = 0;
-          if (rates) {
-            switch (enrollment.enrollmentType) {
-              case "single":
-                payPerHour = rates.single;
-                break;
-              case "couple":
-                payPerHour = rates.couple;
-                break;
-              case "group":
-                payPerHour = rates.group;
-                break;
-              default:
-                payPerHour = 0;
+        const initialDetails = enrollmentsData.map(
+          (enrollment: Enrollment, index: number) => {
+            const rates = professorData.typeId?.rates;
+            let payPerHour = 0;
+            if (rates) {
+              switch (enrollment.enrollmentType) {
+                case "single":
+                  payPerHour = rates.single;
+                  break;
+                case "couple":
+                  payPerHour = rates.couple;
+                  break;
+                case "group":
+                  payPerHour = rates.group;
+                  break;
+                default:
+                  payPerHour = 0;
+              }
             }
+            // Se adapta el objeto al nuevo tipo PayoutDetail
+            return {
+              id: `enrollment-${index}`,
+              status: 1,
+              enrollmentId: enrollment._id,
+              hoursTaught: 0,
+              payPerHour,
+              totalPerEnrollment: 0,
+              description: null,
+              amount: null,
+            };
           }
-          return {
-            enrollmentId: enrollment._id,
-            hoursTaught: 0,
-            payPerHour: payPerHour,
-            totalPerEnrollment: 0,
-          };
-        });
+        );
         setFormData((prev) => ({ ...prev, details: initialDetails }));
-      // eslint-disable-next-line @typescript-eslint/no-unused-vars
       } catch (err: any) {
         setDialogError("Could not fetch data for this professor.");
         setProfessorEnrollments([]);
@@ -328,11 +365,13 @@ export default function PayoutsPage() {
     fetchAndProcessEnrollments();
   }, [formData.professorId]);
 
+  // --- CÁLCULO DE TOTALES (ACTUALIZADO PARA BONOS) ---
   const { subtotal, total } = useMemo(() => {
-    const sub = formData.details.reduce(
-      (acc, detail) => acc + (detail.totalPerEnrollment || 0),
-      0
-    );
+    const sub = formData.details.reduce((acc, detail) => {
+      if (detail.status === 1) return acc + (detail.totalPerEnrollment || 0);
+      if (detail.status === 2) return acc + (detail.amount || 0);
+      return acc;
+    }, 0);
     return { subtotal: sub, total: sub - (formData.discount || 0) };
   }, [formData.details, formData.discount]);
 
@@ -360,46 +399,99 @@ export default function PayoutsPage() {
     setOpenDialog(null);
   };
 
+  // --- NUEVAS FUNCIONES PARA MANEJAR DETALLES ---
   const handleDetailChange = (
-    enrollmentId: string,
-    field: "hoursTaught" | "payPerHour",
-    value: number
+    id: string,
+    field: "hoursTaught" | "payPerHour" | "description" | "amount",
+    value: string | number
   ) => {
-    let newDetails = [...formData.details];
-    let detail = newDetails.find((d) => d.enrollmentId === enrollmentId);
-    if (!detail) return;
-    newDetails = newDetails.map((d) =>
-      d.enrollmentId === enrollmentId ? { ...d } : d
-    );
-    detail = newDetails.find((d) => d.enrollmentId === enrollmentId)!;
-    if (field === "hoursTaught") detail.hoursTaught = value;
-    else if (field === "payPerHour") detail.payPerHour = value;
-    detail.totalPerEnrollment = detail.hoursTaught * (detail.payPerHour || 0);
+    const newDetails = formData.details.map((detail) => {
+      if (detail.id === id) {
+        const updatedDetail = { ...detail };
+        if (field === "hoursTaught" && typeof value === "number") {
+          updatedDetail.hoursTaught = value;
+        } else if (field === "payPerHour" && typeof value === "number") {
+          updatedDetail.payPerHour = value;
+        } else if (field === "description" && typeof value === "string") {
+          updatedDetail.description = value;
+        } else if (field === "amount" && typeof value === "number") {
+          updatedDetail.amount = value;
+        }
+        if (updatedDetail.status === 1) {
+          updatedDetail.totalPerEnrollment =
+            (updatedDetail.hoursTaught || 0) * (updatedDetail.payPerHour || 0);
+        }
+        return updatedDetail;
+      }
+      return detail;
+    });
     setFormData((prev) => ({ ...prev, details: newDetails }));
+  };
+
+  const addBonusItem = () => {
+    const newBonus: PayoutDetail = {
+      id: `bonus-${Date.now()}`,
+      status: 2,
+      enrollmentId: null,
+      hoursTaught: null,
+      payPerHour: null,
+      totalPerEnrollment: null,
+      description: "",
+      amount: 0,
+    };
+    setFormData((prev) => ({ ...prev, details: [...prev.details, newBonus] }));
+  };
+
+  const removeDetailItem = (id: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      details: prev.details.filter((d) => d.id !== id),
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     setIsSubmitting(true);
     setDialogError(null);
     const payload = {
       ...formData,
       details: formData.details
-        .filter((d) => d.hoursTaught > 0)
-        .map((detail) => ({
-          enrollmentId: detail.enrollmentId,
-          hoursTaught: detail.hoursTaught,
-          totalPerStudent: detail.totalPerEnrollment,
-        })),
+        .filter(
+          (d) =>
+            (d.status === 1 && d.hoursTaught && d.hoursTaught > 0) ||
+            (d.status === 2 && d.description)
+        )
+        .map((d) => {
+          if (d.status === 1) {
+            return {
+              enrollmentId: d.enrollmentId,
+              hoursTaught: d.hoursTaught,
+              totalPerStudent: d.totalPerEnrollment,
+              amount: null,
+              description: null,
+              status: 1,
+            };
+          } else {
+            return {
+              enrollmentId: null,
+              hoursTaught: null,
+              totalPerStudent: null,
+              amount: d.amount,
+              description: d.description,
+              status: 2,
+            };
+          }
+        }),
     };
-    console.log("PA CREAAAARRR", payload);
+    console.log("lo que envia", payload);
     try {
       const response = await apiClient("api/payouts", {
         method: "POST",
         body: JSON.stringify(payload),
       });
+      console.log("LO DEL RESSS", response);
       const newPayout = await apiClient(`api/payouts/${response.payout._id}`);
+      console.log("LO QUE MANDDAAAA", newPayout);
       generatePayoutPDF(newPayout);
       const payoutData = await apiClient("api/payouts");
       setPayouts(payoutData);
@@ -524,6 +616,7 @@ export default function PayoutsPage() {
           </CardContent>
         </Card>
       )}
+
       <Dialog
         open={openDialog === "create"}
         onOpenChange={(isOpen) => !isOpen && handleClose()}
@@ -586,78 +679,173 @@ export default function PayoutsPage() {
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
                   </div>
                 ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Enrollment</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead>Hours Taught</TableHead>
-                        <TableHead>Pay/Hour</TableHead>
-                        <TableHead>Total</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {professorEnrollments.length > 0 ? (
-                        professorEnrollments.map((enr) => {
-                          const detail = formData.details.find(
-                            (d) => d.enrollmentId === enr._id
-                          );
-                          return (
-                            <TableRow key={enr._id}>
-                              <TableCell>
-                                {enr.studentIds.map((s) => s.name).join(", ")} (
-                                {enr.planId.name})
-                              </TableCell>
-                              <TableCell className="capitalize">
-                                {enr.enrollmentType}
-                              </TableCell>
-                              <TableCell>
-                                <Input
-                                  type="number"
-                                  placeholder="0"
-                                  className="w-20"
-                                  min="0"
-                                  onChange={(e) =>
-                                    handleDetailChange(
-                                      enr._id,
-                                      "hoursTaught",
-                                      Number(e.target.value)
-                                    )
-                                  }
-                                />
-                              </TableCell>
-                              <TableCell>
-                                <Input
-                                  type="number"
-                                  placeholder="0.00"
-                                  className="w-20"
-                                  min="0"
-                                  step="0.01"
-                                  value={detail?.payPerHour || ""}
-                                  onChange={(e) =>
-                                    handleDetailChange(
-                                      enr._id,
-                                      "payPerHour",
-                                      Number(e.target.value)
-                                    )
-                                  }
-                                />
-                              </TableCell>
-                              <TableCell>
-                                ${(detail?.totalPerEnrollment || 0).toFixed(2)}
+                  <div className="space-y-4">
+                    {/* Class Payments Table */}
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">
+                        Class Payments
+                      </h4>
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Enrollment</TableHead>
+                            <TableHead>Type</TableHead>
+                            <TableHead>Hours Taught</TableHead>
+                            <TableHead>Pay/Hour</TableHead>
+                            <TableHead>Total</TableHead>
+                            <TableHead className="w-[50px]"> </TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {formData.details.filter((d) => d.status === 1)
+                            .length > 0 ? (
+                            formData.details
+                              .filter((d) => d.status === 1)
+                              .map((detail) => {
+                                const enr = professorEnrollments.find(
+                                  (e) => e._id === detail.enrollmentId
+                                );
+                                if (!enr) return null;
+                                return (
+                                  <TableRow key={detail.id}>
+                                    <TableCell className="max-w-xs truncate">
+                                      {enr.studentIds
+                                        .map((s) => s.name)
+                                        .join(", ")}{" "}
+                                      ({enr.planId.name})
+                                    </TableCell>
+                                    <TableCell className="capitalize">
+                                      {enr.enrollmentType}
+                                    </TableCell>
+                                    <TableCell>
+                                      <Input
+                                        type="number"
+                                        placeholder="0"
+                                        className="w-20"
+                                        min="0"
+                                        value={detail.hoursTaught || ""}
+                                        onChange={(e) =>
+                                          handleDetailChange(
+                                            detail.id,
+                                            "hoursTaught",
+                                            Number(e.target.value)
+                                          )
+                                        }
+                                      />
+                                    </TableCell>
+                                    <TableCell>
+                                      <Input
+                                        type="number"
+                                        placeholder="0.00"
+                                        className="w-20"
+                                        min="0"
+                                        step="0.01"
+                                        value={detail.payPerHour ?? ""}
+                                        onChange={(e) =>
+                                          handleDetailChange(
+                                            detail.id,
+                                            "payPerHour",
+                                            Number(e.target.value)
+                                          )
+                                        }
+                                      />
+                                    </TableCell>
+                                    <TableCell>
+                                      $
+                                      {(detail.totalPerEnrollment || 0).toFixed(
+                                        2
+                                      )}
+                                    </TableCell>
+                                    <TableCell>
+                                      <Button
+                                        type="button"
+                                        variant="ghost"
+                                        size="icon"
+                                        onClick={() =>
+                                          removeDetailItem(detail.id)
+                                        }
+                                      >
+                                        <Trash2 className="h-4 w-4 text-destructive" />
+                                      </Button>
+                                    </TableCell>
+                                  </TableRow>
+                                );
+                              })
+                          ) : (
+                            <TableRow>
+                              <TableCell
+                                colSpan={6}
+                                className="text-center h-24"
+                              >
+                                This professor has no active enrollments.
                               </TableCell>
                             </TableRow>
-                          );
-                        })
-                      ) : (
-                        <TableRow>
-                          <TableCell colSpan={5} className="text-center h-24">
-                            This professor has no active enrollments.
-                          </TableCell>
-                        </TableRow>
-                      )}
-                    </TableBody>
-                  </Table>
+                          )}
+                        </TableBody>
+                      </Table>
+                    </div>
+                    {/* Bonuses / Other Items */}
+                    <div>
+                      <h4 className="text-sm font-medium mb-2">
+                        Bonuses / Other Items
+                      </h4>
+                      <div className="space-y-2">
+                        {formData.details
+                          .filter((d) => d.status === 2)
+                          .map((detail) => (
+                            <div
+                              key={detail.id}
+                              className="flex items-center gap-2"
+                            >
+                              <Input
+                                placeholder="Description (e.g., Bonus for July)"
+                                className="flex-1"
+                                value={detail.description || ""}
+                                onChange={(e) =>
+                                  handleDetailChange(
+                                    detail.id,
+                                    "description",
+                                    e.target.value
+                                  )
+                                }
+                              />
+                              <Input
+                                type="number"
+                                placeholder="0.00"
+                                className="w-32"
+                                step="0.01"
+                                value={detail.amount ?? ""}
+                                onChange={(e) =>
+                                  handleDetailChange(
+                                    detail.id,
+                                    "amount",
+                                    Number(e.target.value)
+                                  )
+                                }
+                              />
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon"
+                                onClick={() => removeDetailItem(detail.id)}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </div>
+                          ))}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="mt-2"
+                        onClick={addBonusItem}
+                      >
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Bonus/Other
+                      </Button>
+                    </div>
+                  </div>
                 )}
               </fieldset>
             )}
@@ -755,7 +943,7 @@ export default function PayoutsPage() {
               <div className="mt-2">
                 <Textarea
                   name="notes"
-                  value={formData.notes}
+                  value={formData.notes || ""}
                   onChange={(e) =>
                     setFormData((p) => ({ ...p, notes: e.target.value }))
                   }
@@ -798,9 +986,7 @@ export default function PayoutsPage() {
               onClick={handleToggleStatus}
               disabled={isSubmitting}
             >
-              {isSubmitting && (
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
+              {isSubmitting && <Loader2 className="h-4 w-4 mr-2" />}
               {selectedPayout?.isActive ? "Void Payout" : "Re-activate"}
             </Button>
           </DialogFooter>
