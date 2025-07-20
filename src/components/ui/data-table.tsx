@@ -1,5 +1,4 @@
-// En: components/ui/data-table.tsx
-"use client";
+// En: components/ui/data-table.tsx"use client";
 
 import { useState, useMemo } from "react";
 import type { ReactNode } from "react";
@@ -76,12 +75,14 @@ export function DataTable<T>({
     <div className="space-y-4">
       {/* Barra de Búsqueda */}
       <div className="flex items-center">
-        <Input
-          placeholder={searchPlaceholder || `Search...`}
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="max-w-sm"
-        />
+        {searchKeys && searchKeys.length > 0 && (
+          <Input
+            placeholder={searchPlaceholder || `Search...`}
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="max-w-sm"
+          />
+        )}
       </div>
 
       {/* Tabla (sin cambios) */}
