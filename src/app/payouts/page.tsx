@@ -356,6 +356,7 @@ export default function PayoutsPage() {
         );
         setFormData((prev) => ({ ...prev, details: initialDetails }));
       } catch (err: any) {
+        console.log("el err", err);
         setDialogError("Could not fetch data for this professor.");
         setProfessorEnrollments([]);
       } finally {
