@@ -24,7 +24,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DataTable } from "@/components/ui/data-table";
-import { Plus, Trash2, Loader2 } from "lucide-react";
+import { Plus, Trash2, Loader2, FileText } from "lucide-react";
+import { format, startOfMonth, endOfMonth } from "date-fns";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 // --- DEFINICIONES DE TIPOS ---
 interface Divisa {
@@ -43,12 +46,10 @@ interface StudentBrief {
   _id: string;
   name: string;
 }
-
 interface PlanBrief {
   _id: string;
   name: string;
 }
-
 interface EnrollmentBrief {
   _id: string;
   studentIds: StudentBrief[];
@@ -56,7 +57,6 @@ interface EnrollmentBrief {
   professorId: ProfessorBrief;
   enrollmentType: string;
 }
-
 interface Income {
   _id: string;
   deposit_name: string;
@@ -68,7 +68,6 @@ interface Income {
   idEnrollment: EnrollmentBrief;
   income_date: string;
 }
-
 type IncomeFormData = {
   deposit_name: string;
   amount: number;
@@ -78,6 +77,13 @@ type IncomeFormData = {
   idPaymentMethod: string;
   idEnrollment: string;
 };
+
+interface SummaryItem {
+  paymentMethodId: string;
+  paymentMethodName: string;
+  totalAmount: number;
+  numberOfIncomes: number;
+}
 
 const initialIncomeState: IncomeFormData = {
   deposit_name: "",
@@ -96,7 +102,6 @@ export default function IncomesPage() {
   const [professors, setProfessors] = useState<ProfessorBrief[]>([]);
   const [divisas, setDivisas] = useState<Divisa[]>([]);
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethod[]>([]);
-
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openDialog, setOpenDialog] = useState<"create" | "delete" | null>(
@@ -107,6 +112,15 @@ export default function IncomesPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
   const [globalFilter, setGlobalFilter] = useState<string>("");
+
+  const [isSummaryModalOpen, setIsSummaryModalOpen] = useState(false);
+  const [summaryStartDate, setSummaryStartDate] = useState(
+    format(startOfMonth(new Date()), "yyyy-MM-dd")
+  );
+  const [summaryEndDate, setSummaryEndDate] = useState(
+    format(endOfMonth(new Date()), "yyyy-MM-dd")
+  );
+  const [isGeneratingReport, setIsGeneratingReport] = useState(false);
 
   useEffect(() => {
     const fetchInitialData = async () => {
@@ -140,22 +154,65 @@ export default function IncomesPage() {
     fetchInitialData();
   }, []);
 
+  const handleGenerateSummaryPdf = async () => {
+    setIsGeneratingReport(true);
+    try {
+      const response = await apiClient(
+        `api/incomes/summary-by-payment-method?startDate=${summaryStartDate}&endDate=${summaryEndDate}`
+      );
+
+      const doc = new jsPDF();
+
+      doc.setFontSize(18);
+      doc.text("Incomes Summary by Payment Method", 14, 22);
+      doc.setFontSize(11);
+      doc.setTextColor(100);
+      doc.text(`Period: ${summaryStartDate} to ${summaryEndDate}`, 14, 28);
+
+      autoTable(doc, {
+        startY: 35,
+        head: [["Payment Method", "Number of Incomes", "Total Amount"]],
+        body: response.summary.map((item: SummaryItem) => [
+          item.paymentMethodName,
+          item.numberOfIncomes,
+          `$${item.totalAmount.toFixed(2)}`,
+        ]),
+        foot: [
+          [
+            {
+              content: "Grand Total",
+              colSpan: 2,
+              styles: { halign: "right", fontStyle: "bold" },
+            },
+            `$${response.grandTotalAmount.toFixed(2)}`,
+          ],
+        ],
+        footStyles: { fontStyle: "bold", fontSize: 11, fillColor: [104, 109, 157]  },
+        headStyles: { fillColor: [76, 84, 158] },
+      });
+
+      doc.save(`incomes-summary-${summaryStartDate}_${summaryEndDate}.pdf`);
+      setIsSummaryModalOpen(false);
+    } catch (err: any) {
+      alert(`Error generating report: ${err.message}`);
+    } finally {
+      setIsGeneratingReport(false);
+    }
+  };
+
   const filteredIncomes = useMemo(() => {
     const lowercasedFilter = globalFilter.toLowerCase().trim();
     if (!lowercasedFilter) return incomes;
-
     return incomes.filter((income) => {
       const studentNames =
         income.idEnrollment?.studentIds
           ?.map((s) => s.name)
           .join(", ")
           .toLowerCase() ?? "";
-
       const professorName = income.idProfessor?.name?.toLowerCase() ?? "";
       const depositName = income.deposit_name.toLowerCase();
       const note = income.note?.toLowerCase() ?? "";
       const date = income.income_date;
-
       return (
         studentNames.includes(lowercasedFilter) ||
         professorName.includes(lowercasedFilter) ||
@@ -218,21 +275,23 @@ export default function IncomesPage() {
     }
   };
 
-  // CORRECCIÓN TABLA: Se ajusta la definición de las columnas para que coincida con el tipo esperado.
   const columns = [
     {
+      id: "date",
       header: "Date",
       accessorKey: "row",
       cell: ({ row }: { row: { original: Income } }) =>
         new Date(row.original.income_date).toLocaleDateString(),
     },
     {
+      id: "deposit_name",
       header: "Deposit Name",
       accessorKey: "row",
       cell: ({ row }: { row: { original: Income } }) =>
         row.original.deposit_name,
     },
     {
+      id: "student",
       header: "Student(s)",
       accessorKey: "row",
       cell: ({ row }: { row: { original: Income } }) =>
@@ -240,18 +299,21 @@ export default function IncomesPage() {
         "N/A",
     },
     {
+      id: "professor",
       header: "Professor",
       accessorKey: "row",
       cell: ({ row }: { row: { original: Income } }) =>
         row.original.idProfessor?.name || "N/A",
     },
     {
+      id: "amount",
       header: "Amount",
       accessorKey: "row",
       cell: ({ row }: { row: { original: Income } }) =>
         `${row.original.idDivisa.name} ${row.original.amount.toFixed(2)}`,
     },
     {
+      id: "actions",
       header: "Actions",
       accessorKey: "row",
       cell: ({ row }: { row: { original: Income } }) => (
@@ -281,7 +343,6 @@ export default function IncomesPage() {
     }
   }, [formData.idProfessor]);
 
-  // CORRECCIÓN TABLA: Se transforman los datos al formato anidado que espera el componente DataTable.
   const tableData = useMemo(() => {
     return filteredIncomes.map((income) => ({ row: { original: income } }));
   }, [filteredIncomes]);
@@ -289,13 +350,19 @@ export default function IncomesPage() {
   return (
     <div className="space-y-6 bg-light-background dark:bg-dark-background p-4 md:p-6 rounded-lg">
       <PageHeader title="Incomes" subtitle="Manage all company incomes">
-        <Button
-          className="bg-primary text-white hover:bg-primary/90"
-          onClick={() => handleOpen("create")}
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Add Income
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => setIsSummaryModalOpen(true)}>
+            <FileText className="h-4 w-4 mr-2" />
+            Summary Report
+          </Button>
+          <Button
+            className="bg-primary text-white hover:bg-primary/90"
+            onClick={() => handleOpen("create")}
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Income
+          </Button>
+        </div>
       </PageHeader>
 
       {isLoading && (
@@ -316,13 +383,11 @@ export default function IncomesPage() {
                 className="w-full max-w-lg"
               />
             </div>
-            {/* CORRECCIÓN TABLA: Se pasa 'tableData' en lugar de 'filteredIncomes' */}
             <DataTable columns={columns} data={tableData} searchKeys={[]} />
           </CardContent>
         </Card>
       )}
 
-      {/* DIÁLOGO DE CREAR */}
       <Dialog
         open={openDialog === "create"}
         onOpenChange={(isOpen) => !isOpen && handleClose()}
@@ -384,7 +449,6 @@ export default function IncomesPage() {
                 </Select>
               </div>
             </div>
-
             <div className="space-y-2">
               <Label>Professor</Label>
               <Select
@@ -407,7 +471,6 @@ export default function IncomesPage() {
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
               <Label>Enrollment</Label>
               <Select
@@ -432,7 +495,6 @@ export default function IncomesPage() {
                 </SelectContent>
               </Select>
             </div>
-
             <div className="space-y-2">
               <Label>Payment Method</Label>
               <Select
@@ -480,7 +542,7 @@ export default function IncomesPage() {
           </form>
         </DialogContent>
       </Dialog>
-      {/* DIÁLOGO DE ELIMINAR */}
+
       <Dialog
         open={openDialog === "delete"}
         onOpenChange={(isOpen) => !isOpen && handleClose()}
@@ -510,6 +572,54 @@ export default function IncomesPage() {
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               )}
               Delete
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={isSummaryModalOpen} onOpenChange={setIsSummaryModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Income Summary Report</DialogTitle>
+            <DialogDescription>
+              Select a date range to generate the PDF report.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="summary-start-date">Start Date</Label>
+              <Input
+                id="summary-start-date"
+                type="date"
+                value={summaryStartDate}
+                onChange={(e) => setSummaryStartDate(e.target.value)}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="summary-end-date">End Date</Label>
+              <Input
+                id="summary-end-date"
+                type="date"
+                value={summaryEndDate}
+                onChange={(e) => setSummaryEndDate(e.target.value)}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setIsSummaryModalOpen(false)}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleGenerateSummaryPdf}
+              disabled={isGeneratingReport}
+            >
+              {isGeneratingReport && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
+              Generate PDF
             </Button>
           </DialogFooter>
         </DialogContent>
