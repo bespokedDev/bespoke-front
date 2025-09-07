@@ -1,7 +1,17 @@
-// En: components/ui/data-table.tsx"use client";
+"use client";
 
-import { useState, useMemo } from "react";
-import type { ReactNode } from "react";
+import { useState } from "react";
+import {
+  ColumnDef,
+  flexRender,
+  getCoreRowModel,
+  getFilteredRowModel,
+  getPaginationRowModel,
+  getSortedRowModel,
+  SortingState,
+  useReactTable,
+} from "@tanstack/react-table";
+
 import {
   Table,
   TableBody,
@@ -12,106 +22,117 @@ import {
 } from "@/components/ui/table";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, ChevronRight } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-// --- PROPS DEL COMPONENTE ---
-interface DataTableProps<T> {
-  data: T[];
-  columns: ReadonlyArray<{
-    accessorKey: keyof T;
-    header: string;
-    cell?: (item: T) => ReactNode;
-  }>;
-  // --- ¡CAMBIO AQUÍ! De una sola llave a un arreglo de llaves ---
-  searchKeys: Array<keyof T>;
-  searchPlaceholder?: string; // Placeholder opcional para la barra de búsqueda
+interface DataTableProps<TData, TValue> {
+  columns: ColumnDef<TData, TValue>[];
+  data: TData[];
+  searchKeys?: string[]; // Acepta un array de strings con los nombres de las claves
+  searchPlaceholder?: string;
 }
 
-// --- COMPONENTE PRINCIPAL ---
-export function DataTable<T>({
-  data,
+export function DataTable<TData, TValue>({
   columns,
-  searchKeys,
-  searchPlaceholder,
-}: DataTableProps<T>) {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  data,
+  searchKeys = [],
+  searchPlaceholder = "Search...",
+}: DataTableProps<TData, TValue>) {
+  const [sorting, setSorting] = useState<SortingState>([]);
+  const [globalFilter, setGlobalFilter] = useState("");
 
-  const filteredData = useMemo(() => {
-    if (!searchTerm) {
-      return data;
-    }
-    return data.filter((item) => {
-      // --- ¡LÓGICA MEJORADA AQUÍ! ---
-      // La función 'some' revisa si al menos UNA de las llaves de búsqueda
-      // coincide con el término de búsqueda.
-      return searchKeys.some((key) => {
-        const value = item[key];
-        if (typeof value === "string") {
-          return value.toLowerCase().includes(searchTerm.toLowerCase());
-        }
-        return false;
-      });
-    });
-  }, [data, searchTerm, searchKeys]);
-
-  const paginatedData = useMemo(() => {
-    const startIndex = (currentPage - 1) * itemsPerPage;
-    return filteredData.slice(startIndex, startIndex + itemsPerPage);
-  }, [filteredData, currentPage, itemsPerPage]);
-
-  const totalPages = Math.ceil(filteredData.length / itemsPerPage);
-
-  const handleNextPage = () => {
-    setCurrentPage((prev) => Math.min(prev + 1, totalPages));
-  };
-
-  const handlePreviousPage = () => {
-    setCurrentPage((prev) => Math.max(prev - 1, 1));
-  };
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getPaginationRowModel: getPaginationRowModel(),
+    onSortingChange: setSorting,
+    getSortedRowModel: getSortedRowModel(),
+    onGlobalFilterChange: setGlobalFilter,
+    getFilteredRowModel: getFilteredRowModel(),
+    state: {
+      sorting,
+      globalFilter,
+    },
+    // Le decimos a la tabla cómo obtener el valor para el filtro global
+    globalFilterFn: (row, columnId, filterValue) => {
+      if (!filterValue) return true;
+      
+      // Buscamos en las columnas especificadas en searchKeys
+      if (searchKeys.length > 0) {
+        const searchableText = searchKeys
+          .map((key) => {
+            const value = row.getValue(key);
+            console.log(`Searching in key "${key}":`, value); // Debug
+            return value ? String(value) : "";
+          })
+          .join(" ")
+          .toLowerCase();
+        
+        console.log('Final searchable text:', searchableText); // Debug
+        console.log('Filter value:', filterValue.toLowerCase()); // Debug
+        
+        return searchableText.includes(filterValue.toLowerCase());
+      }
+      
+      // Si no hay searchKeys específicos, retornamos true (sin filtro)
+      return true;
+    },
+  });
 
   return (
-    <div className="space-y-4">
-      {/* Barra de Búsqueda */}
-      <div className="flex items-center">
-        {searchKeys && searchKeys.length > 0 && (
+    <div>
+      {/* --- BARRA DE BÚSQUEDA --- */}
+      {searchKeys.length > 0 && (
+        <div className="flex items-center py-4">
           <Input
-            placeholder={searchPlaceholder || `Search...`}
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder={searchPlaceholder}
+            value={globalFilter}
+            onChange={(event) => setGlobalFilter(event.target.value)}
             className="max-w-sm"
           />
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Tabla (sin cambios) */}
-      <div className="rounded-md border border-light-border dark:border-dark-border">
+      {/* --- TABLA --- */}
+      <div className="rounded-md border">
         <Table>
           <TableHeader>
-            <TableRow className="border-b-light-border dark:border-b-dark-border">
-              {columns.map((column) => (
-                <TableHead
-                  key={String(column.accessorKey)}
-                  className="text-light-subtext dark:text-dark-subtext"
-                >
-                  {column.header}
-                </TableHead>
-              ))}
-            </TableRow>
+            {table.getHeaderGroups().map((headerGroup) => (
+              <TableRow key={headerGroup.id}>
+                {headerGroup.headers.map((header) => {
+                  return (
+                    <TableHead key={header.id}>
+                      {header.isPlaceholder
+                        ? null
+                        : flexRender(
+                            header.column.columnDef.header,
+                            header.getContext()
+                          )}
+                    </TableHead>
+                  );
+                })}
+              </TableRow>
+            ))}
           </TableHeader>
           <TableBody>
-            {paginatedData.length > 0 ? (
-              paginatedData.map((item, index) => (
+            {table.getRowModel().rows?.length ? (
+              table.getRowModel().rows.map((row) => (
                 <TableRow
-                  key={index}
-                  className="text-light-text dark:text-dark-text"
+                  key={row.id}
+                  data-state={row.getIsSelected() && "selected"}
                 >
-                  {columns.map((column) => (
-                    <TableCell key={String(column.accessorKey)}>
-                      {column.cell
-                        ? column.cell(item)
-                        : String(item[column.accessorKey])}
+                  {row.getVisibleCells().map((cell) => (
+                    <TableCell key={cell.id}>
+                      {flexRender(
+                        cell.column.columnDef.cell,
+                        cell.getContext()
+                      )}
                     </TableCell>
                   ))}
                 </TableRow>
@@ -130,29 +151,62 @@ export function DataTable<T>({
         </Table>
       </div>
 
-      {/* Paginación (sin cambios) */}
-      <div className="flex items-center justify-end space-x-2 py-4">
-        <span className="text-sm text-muted-foreground">
-          Page {currentPage} of {totalPages > 0 ? totalPages : 1}
-        </span>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handlePreviousPage}
-          disabled={currentPage === 1}
-        >
-          <ChevronLeft className="h-4 w-4" />
-          Previous
-        </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          onClick={handleNextPage}
-          disabled={currentPage >= totalPages}
-        >
-          Next
-          <ChevronRight className="h-4 w-4" />
-        </Button>
+      {/* --- CONTROLES DE PAGINACIÓN --- */}
+      <div className="flex items-center justify-between space-x-2 py-4">
+        <div className="flex-1 text-sm text-muted-foreground">
+          Showing {table.getRowModel().rows.length} of {data.length} row(s).
+        </div>
+        <div className="flex items-center gap-4">
+          <div className="flex items-center gap-2">
+            <p className="text-sm font-medium">Rows per page</p>
+            <Select
+              value={`${table.getState().pagination.pageSize}`}
+              onValueChange={(value) => {
+                if (value === "all") {
+                  table.setPageSize(data.length);
+                } else {
+                  table.setPageSize(Number(value));
+                }
+              }}
+            >
+              <SelectTrigger className="h-8 w-[70px]">
+                <SelectValue
+                  placeholder={table.getState().pagination.pageSize}
+                />
+              </SelectTrigger>
+              <SelectContent side="top">
+                {[10, 20, 30, 50].map((pageSize) => (
+                  <SelectItem key={pageSize} value={`${pageSize}`}>
+                    {pageSize}
+                  </SelectItem>
+                ))}
+                <SelectItem value="all">All</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-center justify-center text-sm font-medium">
+            Page {table.getState().pagination.pageIndex + 1} of{" "}
+            {table.getPageCount()}
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.previousPage()}
+              disabled={!table.getCanPreviousPage()}
+            >
+              Previous
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => table.nextPage()}
+              disabled={!table.getCanNextPage()}
+            >
+              Next
+            </Button>
+          </div>
+        </div>
       </div>
     </div>
   );

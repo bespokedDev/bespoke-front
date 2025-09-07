@@ -6,6 +6,7 @@ import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api";
 import { PageHeader } from "@/components/ui/page-header";
 import { DataTable } from "@/components/ui/data-table";
+import type { ColumnDef } from "@tanstack/react-table";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -17,7 +18,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Loader2, Eye, Plus } from "lucide-react";
+import { Loader2, Eye, Plus, ArrowUpDown } from "lucide-react";
 import { format } from "date-fns";
 
 // CORRECCIÓN: La interfaz ahora coincide con los datos reales de la API.
@@ -44,6 +45,7 @@ export default function ReportHistoryPage() {
       setError(null);
       try {
         const data = await apiClient("api/general-payment-tracker");
+        console.log("data", data);
         setReports(data);
       } catch (err: any) {
         setError(err.message || "Failed to fetch report history.");
@@ -62,20 +64,39 @@ export default function ReportHistoryPage() {
     router.push(`/accounting/report/new?month=${selectedMonth}`);
   };
 
+  const stringLocaleSort =
+    (locale = "es") =>
+    (rowA: any, rowB: any, columnId: string) => {
+      const a = (rowA.getValue(columnId) ?? "").toString();
+      const b = (rowB.getValue(columnId) ?? "").toString();
+      return a.localeCompare(b, locale, {
+        numeric: true,
+        sensitivity: "base",
+        ignorePunctuation: true,
+      });
+    };
+
   // CORRECCIÓN: Las columnas ahora son más simples y reflejan los datos disponibles.
-  const columns = [
+  const columns: ColumnDef<SavedReportSummary>[] = [
     {
-      id: "month",
-      header: "Report Month",
-      accessorKey: "row",
-      cell: ({ row }: { row: { original: SavedReportSummary } }) =>
-        row.original.month,
+      accessorKey: "month",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Report Month
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
+      sortingFn: stringLocaleSort(),
+      cell: ({ row }) => row.original.month,
     },
     {
-      id: "actions",
+      accessorKey: "actions",
       header: "Actions",
-      accessorKey: "row",
-      cell: ({ row }: { row: { original: SavedReportSummary } }) => (
+      cell: ({ row }) => (
         <Button asChild variant="outline" size="sm">
           {/* El ID se usa aquí para navegar al reporte correcto */}
           <Link href={`/accounting/report/history/${row.original._id}`}>
@@ -84,11 +105,7 @@ export default function ReportHistoryPage() {
         </Button>
       ),
     },
-  ] as const;
-
-  const tableData = useMemo(() => {
-    return reports.map((report) => ({ row: { original: report } }));
-  }, [reports]);
+  ];
 
   if (isLoading)
     return (
@@ -99,7 +116,7 @@ export default function ReportHistoryPage() {
   if (error) return <p className="text-destructive text-center">{error}</p>;
 
   return (
-    <div className="space-y-6 p-4 md:p-6">
+    <div className="space-y-6">
       <PageHeader
         title="Accounting Reports"
         subtitle="View history or create a new monthly report."
@@ -109,7 +126,7 @@ export default function ReportHistoryPage() {
           Create New Report
         </Button>
       </PageHeader>
-      <DataTable columns={columns} data={tableData} searchKeys={[]} />
+      <DataTable columns={columns} data={reports} searchKeys={[]} />
 
       <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
         <DialogContent>

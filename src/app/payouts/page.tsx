@@ -1,9 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-"use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { formatDateForDisplay, createDateSortingFunction, getCurrentDateString, dateStringToISO } from "@/lib/dateUtils";
 import { apiClient } from "@/lib/api";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -27,6 +27,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DataTable } from "@/components/ui/data-table";
+import type { ColumnDef } from "@tanstack/react-table";
 import {
   Plus,
   Ban,
@@ -34,6 +35,8 @@ import {
   Loader2,
   FileDown,
   Trash2,
+  ArrowUpDown,
+  Search,
 } from "lucide-react";
 import {
   Table,
@@ -131,15 +134,15 @@ const initialPayoutState: PayoutFormData = {
   details: [],
   discount: 0,
   paymentMethodId: "",
-  paidAt: new Date().toISOString().split("T")[0],
+  paidAt: getCurrentDateString(),
   notes: "",
 };
 
 // --- GENERADOR DE PDF ---
 const generatePayoutPDF = (payout: Payout) => {
   const doc = new jsPDF();
-  const paidDate = new Date(payout.paidAt).toLocaleDateString();
-  const generationDate = new Date(payout.createdAt).toLocaleDateString();
+  const paidDate = formatDateForDisplay(payout.paidAt);
+  const generationDate = formatDateForDisplay(payout.createdAt);
   const professor = payout.professorId;
   const paymentMethod = payout.paymentMethodId;
   const payoutCode = payout._id.slice(-6).toUpperCase();
@@ -278,9 +281,33 @@ export default function PayoutsPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isEnrollmentsLoading, setIsEnrollmentsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [openDialog, setOpenDialog] = useState<"create" | "status" | null>(
     null
   );
+
+  // Filtrar payouts basado en el término de búsqueda
+  const filteredPayouts = useMemo(() => {
+    if (!searchTerm.trim()) return payouts;
+
+    const term = searchTerm.toLowerCase().trim();
+    
+    return payouts.filter((payout) => {
+      // Buscar por profesor
+      const professorMatch = payout.professorId?.name?.toLowerCase().includes(term);
+      
+      // Buscar por mes
+      const monthMatch = payout.month?.toLowerCase().includes(term);
+      
+      // Buscar por total pagado
+      const totalMatch = payout.total?.toString().includes(term);
+      
+      // Buscar por fecha de pago
+      const paidAtMatch = formatDateForDisplay(payout.paidAt).includes(term);
+      
+      return professorMatch || monthMatch || totalMatch || paidAtMatch;
+    });
+  }, [payouts, searchTerm]);
   const [selectedPayout, setSelectedPayout] = useState<Payout | null>(null);
   const [formData, setFormData] = useState<PayoutFormData>(initialPayoutState);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -296,6 +323,7 @@ export default function PayoutsPage() {
           apiClient("api/professors"),
         ]);
         setPayouts(payoutData);
+        console.log("Payouttttsss!!!!", payoutData);
         setProfessors(professorData);
       } catch (err: any) {
         setError(err.message || "Failed to fetch data.");
@@ -325,7 +353,7 @@ export default function PayoutsPage() {
         const initialDetails = enrollmentsData.map(
           (enrollment: Enrollment, index: number) => {
             const rates = professorData.typeId?.rates;
-            let payPerHour = 0;
+            let payPerHour = null;
             if (rates) {
               switch (enrollment.enrollmentType) {
                 case "single":
@@ -338,7 +366,7 @@ export default function PayoutsPage() {
                   payPerHour = rates.group;
                   break;
                 default:
-                  payPerHour = 0;
+                  payPerHour = null;
               }
             }
             // Se adapta el objeto al nuevo tipo PayoutDetail
@@ -346,7 +374,7 @@ export default function PayoutsPage() {
               id: `enrollment-${index}`,
               status: 1,
               enrollmentId: enrollment._id,
-              hoursTaught: 0,
+              hoursTaught: null,
               payPerHour,
               totalPerEnrollment: 0,
               description: null,
@@ -438,7 +466,7 @@ export default function PayoutsPage() {
       payPerHour: null,
       totalPerEnrollment: null,
       description: "",
-      amount: 0,
+      amount: null,
     };
     setFormData((prev) => ({ ...prev, details: [...prev.details, newBonus] }));
   };
@@ -523,58 +551,123 @@ export default function PayoutsPage() {
     }
   };
 
-  const columns = [
+  const stringLocaleSort =
+    (locale = "es") =>
+    (rowA: any, rowB: any, columnId: string) => {
+      const a = (rowA.getValue(columnId) ?? "").toString();
+      const b = (rowB.getValue(columnId) ?? "").toString();
+      return a.localeCompare(b, locale, {
+        numeric: true,
+        sensitivity: "base",
+        ignorePunctuation: true,
+      });
+    };
+
+  const columns: ColumnDef<Payout>[] = [
     {
-      header: "Professor",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Professor
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
       accessorKey: "professorId",
-      cell: (item: Payout) => item.professorId?.name || "N/A",
+      sortingFn: stringLocaleSort(),
+      cell: ({ row }) => row.original.professorId?.name || "N/A",
     },
-    { header: "Month", accessorKey: "month" },
+    { 
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Month
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
+      accessorKey: "month",
+      sortingFn: stringLocaleSort(),
+    },
     {
-      header: "Total Paid",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Total Paid
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
       accessorKey: "total",
-      cell: (item: Payout) => `$${item.total.toFixed(2)}`,
+      sortingFn: stringLocaleSort(),
+      cell: ({ row }) => `$${(row.original.total || 0).toFixed(2)}`,
     },
     {
-      header: "Date Paid",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Date Paid
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
       accessorKey: "paidAt",
-      cell: (item: Payout) => new Date(item.paidAt).toLocaleDateString(),
+      sortingFn: createDateSortingFunction("paidAt"),
+      cell: ({ row }) => formatDateForDisplay(row.original.paidAt),
     },
     {
-      header: "Status",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Status
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
       accessorKey: "isActive",
-      cell: (item: Payout) => (
+      sortingFn: stringLocaleSort(),
+      cell: ({ row }) => (
         <span
           className={`px-2 py-1 rounded-full text-xs font-semibold ${
-            item.isActive
+            row.original.isActive
               ? "bg-secondary/20 text-secondary"
               : "bg-accent-1/20 text-accent-1"
           }`}
         >
-          {item.isActive ? "Paid" : "Voided"}
+          {row.original.isActive ? "Paid" : "Voided"}
         </span>
       ),
     },
     {
       header: "Actions",
       accessorKey: "_id",
-      cell: (item: Payout) => (
+      cell: ({ row }) => (
         <div className="flex gap-2">
           <Button
             title="Download Receipt"
             size="icon"
             variant="outline"
-            onClick={() => generatePayoutPDF(item)}
+            onClick={() => generatePayoutPDF(row.original)}
           >
             <FileDown className="h-4 w-4" />
           </Button>
           <Button
-            title={item.isActive ? "Void Payout" : "Re-activate Payout"}
+            title={row.original.isActive ? "Void Payout" : "Re-activate Payout"}
             size="icon"
             variant="outline"
-            onClick={() => handleOpen("status", item)}
+            onClick={() => handleOpen("status", row.original)}
           >
-            {item.isActive ? (
+            {row.original.isActive ? (
               <Ban className="h-4 w-4 text-accent-1" />
             ) : (
               <CheckCircle2 className="h-4 w-4 text-secondary" />
@@ -583,10 +676,10 @@ export default function PayoutsPage() {
         </div>
       ),
     },
-  ] as const;
+  ];
 
   return (
-    <div className="space-y-6 bg-light-background dark:bg-dark-background p-4 md:p-6 rounded-lg">
+    <div className="space-y-6">
       <PageHeader
         title="Payouts"
         subtitle="Manage professor payments and salaries"
@@ -606,13 +699,24 @@ export default function PayoutsPage() {
       )}
       {error && <p className="text-accent-1 text-center">{error}</p>}
       {!isLoading && !error && (
-        <Card className="bg-light-card dark:bg-dark-card border-none">
-          <CardContent className="pt-6">
+        <Card>
+          <CardContent>
+            <div className="mb-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+                <Input
+                  placeholder="Search..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </div>
             <DataTable
               columns={columns}
-              data={payouts}
+              data={filteredPayouts}
               searchKeys={[]}
-              searchPlaceholder="Search..."
+              searchPlaceholder=""
             />
           </CardContent>
         </Card>

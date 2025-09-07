@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { apiClient } from "@/lib/api";
+import { formatDateForDisplay, getCurrentDateString, extractDatePart } from "@/lib/dateUtils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +17,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DataTable } from "@/components/ui/data-table"; // <-- IMPORTAMOS EL NUEVO COMPONENTE
-import { Plus, Pencil, Ban, CheckCircle2, Loader2, Trash2 } from "lucide-react";
+import { Plus, Pencil, Ban, CheckCircle2, Loader2, Trash2, Eye, ArrowUpDown } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
+import type { ColumnDef } from "@tanstack/react-table";
 
 // --- Tipos y Estado Inicial (igual que antes) ---
 interface PaymentData {
@@ -76,7 +78,7 @@ const initialProfessorState: ProfessorFormData = {
 const formatDateForInput = (dateString?: string | null) => {
   if (!dateString) return "";
   try {
-    return new Date(dateString).toISOString().split("T")[0];
+    return extractDatePart(dateString);
   } catch (e) {
     console.log("error: ", e)
     return "";
@@ -91,7 +93,7 @@ export default function TeachersPage() {
 
   // Estados del diálogo (se mantienen igual)
   const [openDialog, setOpenDialog] = useState<
-    "create" | "edit" | "status" | null
+    "create" | "edit" | "status" | "view" | null
   >(null);
   const [selectedTeacher, setSelectedTeacher] = useState<Professor | null>(
     null
@@ -121,7 +123,7 @@ export default function TeachersPage() {
   }, []);
 
   const handleOpen = (
-    type: "create" | "edit" | "status",
+    type: "create" | "edit" | "status" | "view",
     teacher?: Professor
   ) => {
     /* ... (sin cambios) ... */
@@ -131,12 +133,14 @@ export default function TeachersPage() {
       setFormData(initialProfessorState);
     } else if (teacher) {
       setSelectedTeacher(teacher);
-      const { /*_id, isActive, __v,*/ ...editableData } = teacher as any;
-      if (editableData.dob)
-        editableData.dob = formatDateForInput(editableData.dob);
-      if (editableData.startDate)
-        editableData.startDate = formatDateForInput(editableData.startDate);
-      setFormData(editableData);
+      if (type === "edit") {
+        const { /*_id, isActive, __v,*/ ...editableData } = teacher as any;
+        if (editableData.dob)
+          editableData.dob = formatDateForInput(editableData.dob);
+        if (editableData.startDate)
+          editableData.startDate = formatDateForInput(editableData.startDate);
+        setFormData(editableData);
+      }
     }
     setOpenDialog(type);
   };
@@ -249,45 +253,114 @@ export default function TeachersPage() {
     }
   };
 
+  const stringLocaleSort =
+    (locale = "es") =>
+    (rowA: any, rowB: any, columnId: string) => {
+      const a = (rowA.getValue(columnId) ?? "").toString();
+      const b = (rowB.getValue(columnId) ?? "").toString();
+      return a.localeCompare(b, locale, {
+        numeric: true,
+        sensitivity: "base",
+        ignorePunctuation: true,
+      });
+    };
+
   // --- DEFINICIÓN DE COLUMNAS PARA LA TABLA REUTILIZABLE ---
-  const columns = [
-    { accessorKey: "name", header: "Name" },
-    { accessorKey: "email", header: "Email" },
-    { accessorKey: "phone", header: "Phone" },
+  const columns: ColumnDef<Professor>[] = [
+    { 
+      accessorKey: "name", 
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Name
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
+      sortingFn: stringLocaleSort(),
+    },
+    { 
+      accessorKey: "email", 
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Email
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
+      sortingFn: stringLocaleSort(),
+    },
+    { 
+      accessorKey: "phone", 
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Phone
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
+      sortingFn: stringLocaleSort(),
+    },
     {
       accessorKey: "isActive",
-      header: "Status",
-      cell: (item: Professor) => (
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Status
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
+      sortingFn: stringLocaleSort(),
+      cell: ({ row }) => (
         <span
           className={`px-2 py-1 rounded-full text-xs font-semibold ${
-            item.isActive
+            row.original.isActive
               ? "bg-secondary/20 text-secondary"
               : "bg-accent-1/20 text-accent-1"
           }`}
         >
-          {item.isActive ? "Active" : "Inactive"}
+          {row.original.isActive ? "Active" : "Inactive"}
         </span>
       ),
     },
     {
-      accessorKey: "_id",
+      id: "actions",
       header: "Actions",
-      cell: (item: Professor) => (
+      cell: ({ row }) => (
         <div className="flex gap-2">
           <Button
             size="icon"
             variant="outline"
+            className="text-secondary border-secondary/50 hover:bg-secondary/10"
+            onClick={() => handleOpen("view", row.original)}
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
             className="text-primary border-primary/50 hover:bg-primary/10"
-            onClick={() => handleOpen("edit", item)}
+            onClick={() => handleOpen("edit", row.original)}
           >
             <Pencil className="h-4 w-4" />
           </Button>
-          {item.isActive ? (
+          {row.original.isActive ? (
             <Button
               size="icon"
               variant="outline"
               className="text-accent-1 border-accent-1/50 hover:bg-accent-1/10"
-              onClick={() => handleOpen("status", item)}
+              onClick={() => handleOpen("status", row.original)}
             >
               <Ban className="h-4 w-4" />
             </Button>
@@ -296,7 +369,7 @@ export default function TeachersPage() {
               size="icon"
               variant="outline"
               className="text-secondary border-secondary/50 hover:bg-secondary/10"
-              onClick={() => handleOpen("status", item)}
+              onClick={() => handleOpen("status", row.original)}
             >
               <CheckCircle2 className="h-4 w-4" />
             </Button>
@@ -304,11 +377,11 @@ export default function TeachersPage() {
         </div>
       ),
     },
-  ] as const;
+  ];
 
   // --- RENDERIZADO DEL COMPONENTE ---
   return (
-    <div className="space-y-6 p-4 md:p-6 rounded-lg">
+    <div className="space-y-6">
       <PageHeader
         title="Teachers"
         subtitle="List of all teachers registered in the academy"
@@ -331,7 +404,7 @@ export default function TeachersPage() {
 
       {!isLoading && !error && (
         <Card className=" border-none">
-          <CardContent className="pt-6">
+          <CardContent>
             <DataTable
               columns={columns}
               data={teachers}
@@ -340,18 +413,17 @@ export default function TeachersPage() {
           </CardContent>
         </Card>
       )}
-
-      {/* Los diálogos se mantienen sin cambios */}
+      
       <Dialog
         open={openDialog !== null}
         onOpenChange={(isOpen) => !isOpen && handleClose()}
       >
-        {/* ... (todo el JSX de los diálogos se mantiene exactamente igual que antes) ... */}
         <DialogContent className="sm:max-w-4xl">
           <DialogHeader>
             <DialogTitle>
               {openDialog === "create" && "Add New Teacher"}
               {openDialog === "edit" && "Edit Teacher's Information"}
+              {openDialog === "view" && "Teacher Details"}
               {openDialog === "status" && `Confirm Status Change`}
             </DialogTitle>
           </DialogHeader>
@@ -615,6 +687,122 @@ export default function TeachersPage() {
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   )}
                   {selectedTeacher.isActive ? "Deactivate" : "Activate"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {openDialog === "view" && selectedTeacher && (
+            <div className="space-y-6 max-h-[70vh] overflow-y-auto p-1 pr-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                <div>
+                  <Label className="font-semibold">Full Name</Label>
+                  <p className="text-sm font-semibold">{selectedTeacher.name}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">CI Number</Label>
+                  <p className="text-sm font-semibold">{selectedTeacher.ciNumber}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Email</Label>
+                  <p className="text-sm">{selectedTeacher.email}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Phone</Label>
+                  <p className="text-sm">{selectedTeacher.phone}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Date of Birth</Label>
+                  <p className="text-sm">
+                    {selectedTeacher.dob ? formatDateForDisplay(selectedTeacher.dob) : "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Start Date</Label>
+                  <p className="text-sm">
+                    {selectedTeacher.startDate ? formatDateForDisplay(selectedTeacher.startDate) : "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Occupation</Label>
+                  <p className="text-sm">{selectedTeacher.occupation || "N/A"}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Status</Label>
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                      selectedTeacher.isActive
+                        ? "bg-secondary/20 text-secondary"
+                        : "bg-accent-1/20 text-accent-1"
+                    }`}
+                  >
+                    {selectedTeacher.isActive ? "Active" : "Inactive"}
+                  </span>
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="font-semibold">Address</Label>
+                  <p className="text-sm">{selectedTeacher.address || "N/A"}</p>
+                </div>
+              </div>
+
+              {selectedTeacher.emergencyContact && (
+                selectedTeacher.emergencyContact.name || selectedTeacher.emergencyContact.phone
+              ) && (
+                <div className="border p-4 rounded-md">
+                  <h3 className="text-lg font-medium mb-4">Emergency Contact</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <Label className="text-sm text-muted-foreground font-semibold">Name</Label>
+                      <p className="text-sm">{selectedTeacher.emergencyContact.name || "N/A"}</p>
+                    </div>
+                    <div>
+                      <Label className="text-sm text-muted-foreground font-semibold">Phone</Label>
+                      <p className="text-sm">{selectedTeacher.emergencyContact.phone || "N/A"}</p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {selectedTeacher.paymentData && selectedTeacher.paymentData.length > 0 && (
+                <div>
+                  <h3 className="text-lg font-semibold pb-1">Payment Data</h3>
+                  {selectedTeacher.paymentData.map((payment, index) => (
+                    <div key={payment._id || index} className="border p-4 rounded-md mb-4">
+                      <h4 className="font-semibold mb-3">Method {index + 1}</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <Label className="text-sm text-muted-foreground">Bank Name</Label>
+                          <p className="text-sm">{payment.bankName || "N/A"}</p>
+                        </div>
+                        <div>
+                          <Label className="text-sm text-muted-foreground">Account Type</Label>
+                          <p className="text-sm">{payment.accountType || "N/A"}</p>
+                        </div>
+                        <div>
+                          <Label className="text-sm text-muted-foreground">Account Number</Label>
+                          <p className="text-sm">{payment.accountNumber || "N/A"}</p>
+                        </div>
+                        <div>
+                          <Label className="text-sm text-muted-foreground">Holder's Name</Label>
+                          <p className="text-sm">{payment.holderName || "N/A"}</p>
+                        </div>
+                        <div>
+                          <Label className="text-sm text-muted-foreground">Holder's CI</Label>
+                          <p className="text-sm">{payment.holderCI || "N/A"}</p>
+                        </div>
+                        <div>
+                          <Label className="text-sm text-muted-foreground">Holder's Email</Label>
+                          <p className="text-sm">{payment.holderEmail || "N/A"}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <DialogFooter className="pt-4 border-t">
+                <Button variant="outline" onClick={handleClose}>
+                  Close
                 </Button>
               </DialogFooter>
             </div>

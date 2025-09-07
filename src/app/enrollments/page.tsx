@@ -1,7 +1,9 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */
-"use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */ "use client";
 import { useState, useEffect, useMemo } from "react";
+import type { ColumnDef } from "@tanstack/react-table";
+import { ArrowUpDown } from "lucide-react";
 import { apiClient } from "@/lib/api";
+import { formatDateForDisplay, getCurrentDateString, extractDatePart } from "@/lib/dateUtils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -43,10 +45,10 @@ import {
   Loader2,
   ChevronsUpDown,
   X,
+  Eye,
 } from "lucide-react";
 
 // --- DEFINICIONES DE TIPOS ---
-// Tipos para los datos que vamos a fetchear para los selects
 interface Plan {
   _id: string;
   name: string;
@@ -61,22 +63,31 @@ interface ProfessorBrief {
   name: string;
 }
 
-// Tipo principal para la matrícula
+interface ScheduledDay {
+  _id?: string;
+  day: string;
+}
+
 interface Enrollment {
   _id: string;
   planId: Plan;
   studentIds: StudentBrief[];
   professorId?: ProfessorBrief | null;
   enrollmentType: "single" | "couple" | "group";
-  scheduledDays: Array<{ day: string }> | string | null;
+  scheduledDays: ScheduledDay[] | null;
   purchaseDate: string;
+  startDate?: string;
   pricePerStudent: number;
   totalAmount: number;
-  status: string;
-  isActive: boolean;
+  status: number; // 1=activo, 0=inactivo, 2=pausado
+  alias?: string; // 👈 NUEVO
+  language?: string; // 👈 NUEVO
 }
 
-// Tipo para el formulario
+type EnrollmentWithSearch = Enrollment & {
+  searchableString: string;
+};
+
 type EnrollmentFormData = {
   planId: string;
   studentIds: string[];
@@ -84,9 +95,12 @@ type EnrollmentFormData = {
   enrollmentType: "single" | "couple" | "group";
   scheduledDays: string[];
   purchaseDate: string;
+  startDate?: string;
   pricePerStudent: number;
   totalAmount: number;
-  status: string;
+  status?: number;
+  alias?: string; // 👈 NUEVO
+  language?: string; // 👈 NUEVO
 };
 
 // --- ESTADO INICIAL ---
@@ -96,10 +110,12 @@ const initialEnrollmentState: EnrollmentFormData = {
   professorId: "",
   enrollmentType: "single",
   scheduledDays: [],
-  purchaseDate: new Date().toISOString().split("T")[0],
+  purchaseDate: getCurrentDateString(),
+  startDate: getCurrentDateString(),
   pricePerStudent: 0,
   totalAmount: 0,
-  status: "No Active",
+  alias: "", // 👈 NUEVO
+  language: "", // 👈 NUEVO
 };
 
 const weekDays = [
@@ -114,17 +130,15 @@ const weekDays = [
 
 // --- COMPONENTE PRINCIPAL ---
 export default function EnrollmentsPage() {
-  // Datos principales y de soporte
   const [enrollments, setEnrollments] = useState<Enrollment[]>([]);
   const [plans, setPlans] = useState<Plan[]>([]);
   const [students, setStudents] = useState<StudentBrief[]>([]);
   const [professors, setProfessors] = useState<ProfessorBrief[]>([]);
 
-  // Estados de UI
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [openDialog, setOpenDialog] = useState<
-    "create" | "edit" | "status" | null
+    "create" | "edit" | "status" | "view" | null
   >(null);
   const [selectedEnrollment, setSelectedEnrollment] =
     useState<Enrollment | null>(null);
@@ -134,20 +148,6 @@ export default function EnrollmentsPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
 
-  const searchableData = useMemo(() => {
-    return enrollments.map((enrollment) => {
-      const studentNames = enrollment.studentIds.map((s) => s.name).join(" ");
-      const planName = enrollment.planId.name;
-      const professorName = enrollment.professorId?.name || "";
-
-      return {
-        ...enrollment,
-        searchableString: `${studentNames} ${planName} ${professorName}`,
-      };
-    });
-  }, [enrollments]);
-
-  // --- LÓGICA DE DATOS Y FORMULARIO ---
   useEffect(() => {
     const fetchInitialData = async () => {
       try {
@@ -161,9 +161,11 @@ export default function EnrollmentsPage() {
             apiClient("api/professors"),
           ]);
         setEnrollments(enrollmentData);
-        setPlans(planData);
+        // Handle API response structure for plans
+        setPlans(planData.plans || planData || []);
         setStudents(studentData);
-        setProfessors(professorData);
+        const sortedProfessors = professorData.sort((a: any, b: any) => a.name.localeCompare(b.name));
+        setProfessors(sortedProfessors);
       } catch (err: any) {
         setError(err.message || "Failed to fetch data.");
       } finally {
@@ -173,8 +175,8 @@ export default function EnrollmentsPage() {
     fetchInitialData();
   }, []);
 
-  // Efecto para calcular el precio dinámicamente
   useEffect(() => {
+    if (!plans || !Array.isArray(plans)) return;
     const selectedPlan = plans.find((p) => p._id === formData.planId);
     if (!selectedPlan) return;
 
@@ -185,10 +187,10 @@ export default function EnrollmentsPage() {
       pricePerStudent = selectedPlan.pricing.single;
       enrollmentType = "single";
     } else if (formData.studentIds.length === 2) {
-      pricePerStudent = selectedPlan.pricing.couple;
+      pricePerStudent = selectedPlan.pricing.couple / 2;
       enrollmentType = "couple";
     } else if (formData.studentIds.length > 2) {
-      pricePerStudent = selectedPlan.pricing.group;
+      pricePerStudent = selectedPlan.pricing.group / formData.studentIds.length;
       enrollmentType = "group";
     }
 
@@ -202,9 +204,8 @@ export default function EnrollmentsPage() {
     }));
   }, [formData.planId, formData.studentIds, plans]);
 
-  // --- MANEJADORES ---
   const handleOpen = (
-    type: "create" | "edit" | "status",
+    type: "create" | "edit" | "status" | "view",
     enrollment?: Enrollment
   ) => {
     setDialogError(null);
@@ -213,33 +214,30 @@ export default function EnrollmentsPage() {
       setFormData(initialEnrollmentState);
     } else if (enrollment) {
       setSelectedEnrollment(enrollment);
-      let scheduledDaysArray: string[] = [];
-      if (
-        typeof enrollment.scheduledDays === "string" &&
-        enrollment.scheduledDays
-      ) {
-        scheduledDaysArray = enrollment.scheduledDays
-          .split(",")
-          .map((s) => s.trim());
-      } else if (Array.isArray(enrollment.scheduledDays)) {
-        scheduledDaysArray = enrollment.scheduledDays.map((d) => d.day);
+      if (type === "edit") {
+        const scheduledDaysArray =
+          enrollment.scheduledDays?.map((d) => d.day) || [];
+        setFormData({
+          planId: enrollment.planId._id,
+          studentIds: enrollment.studentIds.map((s) => s._id),
+          professorId: enrollment.professorId?._id || "",
+          enrollmentType: enrollment.enrollmentType,
+          scheduledDays: scheduledDaysArray,
+          purchaseDate: extractDatePart(enrollment.purchaseDate),
+          startDate: enrollment.startDate
+            ? extractDatePart(enrollment.startDate)
+            : getCurrentDateString(),
+          pricePerStudent: enrollment.pricePerStudent,
+          totalAmount: enrollment.totalAmount,
+          status: enrollment.status,
+          alias: enrollment.alias || "", // 👈 NUEVO
+          language: enrollment.language || "", // 👈 NUEVO
+        });
       }
-      setFormData({
-        planId: enrollment.planId._id,
-        studentIds: enrollment.studentIds.map((s) => s._id),
-        professorId: enrollment.professorId?._id || "",
-        enrollmentType: enrollment.enrollmentType,
-        scheduledDays: scheduledDaysArray,
-        purchaseDate: new Date(enrollment.purchaseDate)
-          .toISOString()
-          .split("T")[0],
-        pricePerStudent: enrollment.pricePerStudent,
-        totalAmount: enrollment.totalAmount,
-        status: enrollment.status,
-      });
     }
     setOpenDialog(type);
   };
+
   const handleClose = () => {
     setOpenDialog(null);
   };
@@ -248,11 +246,16 @@ export default function EnrollmentsPage() {
     e.preventDefault();
     setIsSubmitting(true);
     setDialogError(null);
-    // Transforma scheduledDays a la estructura correcta si es necesario
     const payload = {
       ...formData,
-      scheduledDays: formData.scheduledDays.join(", "), // O el formato que tu API espere
+      scheduledDays:
+        formData.scheduledDays.length > 0
+          ? formData.scheduledDays.map((day) => ({ day }))
+          : [],
+      status: openDialog === "create" ? 1 : formData.status,
     };
+    console.log("EL STATTUSSS", formData.status, openDialog);
+    console.log("EL PAYLLOOAAADDD", payload);
     try {
       if (openDialog === "create") {
         await apiClient("api/enrollments", {
@@ -265,7 +268,6 @@ export default function EnrollmentsPage() {
           body: JSON.stringify(payload),
         });
       }
-      // Refrescar solo los enrollments para optimizar
       const enrollmentData = await apiClient("api/enrollments");
       setEnrollments(enrollmentData);
       handleClose();
@@ -280,11 +282,16 @@ export default function EnrollmentsPage() {
     if (!selectedEnrollment) return;
     setIsSubmitting(true);
     setDialogError(null);
-    const action = selectedEnrollment.isActive ? "deactivate" : "activate";
+
     try {
+      // Determinar si está activo o inactivo basado en status
+      const action =
+        selectedEnrollment.status === 1 ? "deactivate" : "activate";
+
       await apiClient(`api/enrollments/${selectedEnrollment._id}/${action}`, {
         method: "PATCH",
       });
+
       const enrollmentData = await apiClient("api/enrollments");
       setEnrollments(enrollmentData);
       handleClose();
@@ -295,51 +302,168 @@ export default function EnrollmentsPage() {
     }
   };
 
-  // --- DEFINICIÓN DE COLUMNAS ---
-  const columns = [
+  const stringLocaleSort =
+    (locale = "es") =>
+    (rowA: any, rowB: any, columnId: string) => {
+      const a = (rowA.getValue(columnId) ?? "").toString();
+      const b = (rowB.getValue(columnId) ?? "").toString();
+      return a.localeCompare(b, locale, {
+        numeric: true,
+        sensitivity: "base",
+        ignorePunctuation: true,
+      });
+    };
+
+  const columns: ColumnDef<Enrollment>[] = [
+    // Alias o lista de estudiantes (string plano)
     {
-      header: "Students",
-      accessorKey: "studentIds",
-      cell: (item: Enrollment) => (
-        <div>{item.studentIds.map((s) => s.name).join(", ")}</div>
-      ),
-    },
-    {
-      header: "Plan",
-      accessorKey: "planId",
-      cell: (item: Enrollment) => item.planId.name,
-    },
-    {
-      header: "Professor",
-      accessorKey: "professorId",
-      cell: (item: Enrollment) => item.professorId?.name || "N/A",
-    },
-    { header: "Status", accessorKey: "status" },
-    {
-      header: "Active",
-      accessorKey: "isActive",
-      cell: (item: Enrollment) => (
-        <span
-          className={`px-2 py-1 rounded-full text-xs font-semibold ${
-            item.isActive
-              ? "bg-secondary/20 text-secondary"
-              : "bg-accent-1/20 text-accent-1"
-          }`}
+      id: "aliasOrStudents",
+      accessorFn: (row) =>
+        row.alias?.trim() ||
+        row.studentIds.map((s: { name: string }) => s.name).join(", "),
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
         >
-          {item.isActive ? "Active" : "Inactive"}
-        </span>
+          Alias / Students
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
       ),
+      sortingFn: stringLocaleSort(), // 👈 orden alfabético real
+      cell: ({ row }) => {
+        const alias = row.original.alias;
+        return alias?.trim()
+          ? alias
+          : row.original.studentIds.map((s) => s.name).join(", ");
+      },
+    },
+    // Language
+    {
+      id: "language",
+      accessorFn: (row) => row.language || "N/A",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Language
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
+      sortingFn: stringLocaleSort(),
+      cell: ({ row }) => row.original.language || "N/A",
+    },
+    // Plan + tipo (string plano)
+    {
+      id: "planWithType",
+      accessorFn: (row) => {
+        const planName = row.planId.name;
+        const type =
+          row.enrollmentType === "single"
+            ? "Single"
+            : row.enrollmentType === "couple"
+            ? "Couple"
+            : "Group";
+        return `${type} - ${planName}`;
+      },
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Plan
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
+      sortingFn: stringLocaleSort(), // 👈 orden alfabético real
+      cell: ({ row }) => {
+        const planName = row.original.planId.name;
+        const t = row.original.enrollmentType;
+        const type =
+          t === "single" ? "Single" : t === "couple" ? "Couple" : "Group";
+        return (
+          <div>
+            {type} - {planName}
+          </div>
+        );
+      },
+    },
+
+    // Profesor (string plano)
+    {
+      id: "professor",
+      accessorFn: (row) => row.professorId?.name || "N/A",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Professor
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
+      sortingFn: stringLocaleSort(), // 👈 orden alfabético real
+      cell: ({ row }) => row.original.professorId?.name || "N/A",
+    },
+
+    // Status (si prefieres alfabético, lo exponemos como texto)
+    {
+      id: "statusText",
+      accessorFn: (row) =>
+        row.status === 1 ? "Active" : row.status === 0 ? "Inactive" : "Paused",
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Status
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
+      sortingFn: stringLocaleSort(), // 👈 alfabético
+      cell: ({ row }) => {
+        const status = row.original.status;
+        const statusText =
+          status === 1 ? "Active" : status === 0 ? "Inactive" : "Paused";
+        const statusClass =
+          status === 1
+            ? "bg-secondary/20 text-secondary"
+            : status === 0
+            ? "bg-accent-1/20 text-accent-1"
+            : "bg-yellow-100 text-yellow-800";
+        return (
+          <span
+            className={`px-2 py-1 rounded-full text-xs font-semibold ${statusClass}`}
+          >
+            {statusText}
+          </span>
+        );
+      },
     },
     {
+      id: "actions",
       header: "Actions",
-      accessorKey: "_id",
-      cell: (item: Enrollment) => (
+      cell: ({ row }) => (
         <div className="flex gap-2">
           <Button
             size="icon"
             variant="outline"
+            className="text-secondary border-secondary/50 hover:bg-secondary/10"
+            onClick={() => handleOpen("view", row.original)}
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
             className="text-primary border-primary/50 hover:bg-primary/10"
-            onClick={() => handleOpen("edit", item)}
+            onClick={() => handleOpen("edit", row.original)}
           >
             <Pencil className="h-4 w-4" />
           </Button>
@@ -347,9 +471,9 @@ export default function EnrollmentsPage() {
             size="icon"
             variant="outline"
             className="text-accent-1 border-accent-1/50 hover:bg-accent-1/10"
-            onClick={() => handleOpen("status", item)}
+            onClick={() => handleOpen("status", row.original)}
           >
-            {item.isActive ? (
+            {row.original.status === 1 ? (
               <Ban className="h-4 w-4 text-accent-1" />
             ) : (
               <CheckCircle2 className="h-4 w-4 text-secondary" />
@@ -358,11 +482,10 @@ export default function EnrollmentsPage() {
         </div>
       ),
     },
-  ] as const;
+  ];
 
-  // --- RENDERIZADO ---
   return (
-    <div className="space-y-6 bg-light-background dark:bg-dark-background p-4 md:p-6 rounded-lg">
+    <div className="space-y-6">
       <PageHeader
         title="Enrollments"
         subtitle="Manage student enrollments in plans and classes"
@@ -384,179 +507,334 @@ export default function EnrollmentsPage() {
       {error && <p className="text-accent-1 text-center">{error}</p>}
 
       {!isLoading && !error && (
-        <Card className="bg-light-card dark:bg-dark-card border-none">
-          <CardContent className="pt-6">
+        <Card className="border-none">
+          <CardContent>
             <DataTable
               columns={columns}
-              data={searchableData}
-              searchKeys={["searchableString"]}
-              searchPlaceholder="Search..."
+              data={enrollments}
+              searchKeys={["aliasOrStudents", "language", "planWithType", "professor", "statusText"]}
+              searchPlaceholder="Search enrollments..."
             />
           </CardContent>
         </Card>
       )}
 
-      {/* --- DIÁLOGO DE CREAR/EDITAR --- */}
       <Dialog
-        open={openDialog === "create" || openDialog === "edit"}
+        open={
+          openDialog === "create" ||
+          openDialog === "edit" ||
+          openDialog === "view"
+        }
         onOpenChange={(isOpen) => !isOpen && handleClose()}
       >
         <DialogContent className="sm:max-w-3xl">
           <DialogHeader>
             <DialogTitle>
-              {openDialog === "create"
-                ? "Create Enrollment"
-                : "Edit Enrollment"}
+              {openDialog === "create" && "Create Enrollment"}
+              {openDialog === "edit" && "Edit Enrollment"}
+              {openDialog === "view" && "Enrollment Details"}
             </DialogTitle>
           </DialogHeader>
-          <form
-            onSubmit={handleSubmit}
-            className="space-y-4 max-h-[70vh] overflow-y-auto p-1 pr-4"
-          >
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Plan */}
-              <div className="space-y-2">
-                <Label>Plan</Label>
-                <Select
-                  value={formData.planId}
-                  onValueChange={(v) =>
-                    setFormData((p) => ({ ...p, planId: v }))
-                  }
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a plan..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {plans.map((p) => (
-                      <SelectItem key={p._id} value={p._id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+
+          {(openDialog === "create" || openDialog === "edit") && (
+            <form
+              onSubmit={handleSubmit}
+              className="space-y-4 max-h-[70vh] overflow-y-auto p-1 pr-4"
+            >
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Plan</Label>
+                  <Select
+                    value={formData.planId}
+                    onValueChange={(v) =>
+                      setFormData((p) => ({ ...p, planId: v }))
+                    }
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a plan..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {plans.map((p) => (
+                        <SelectItem key={p._id} value={p._id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Professor</Label>
+                  <Select
+                    value={formData.professorId}
+                    onValueChange={(v) =>
+                      setFormData((p) => ({ ...p, professorId: v }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a professor..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {professors.map((p) => (
+                        <SelectItem key={p._id} value={p._id}>
+                          {p.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
-              {/* Professor */}
               <div className="space-y-2">
-                <Label>Professor</Label>
-                <Select
-                  value={formData.professorId}
-                  onValueChange={(v) =>
-                    setFormData((p) => ({ ...p, professorId: v }))
+                <Label>Students</Label>
+                <MultiSelect
+                  items={students}
+                  selectedIds={formData.studentIds}
+                  onSelectedChange={(ids) =>
+                    setFormData((p) => ({ ...p, studentIds: ids }))
                   }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a professor..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {professors.map((p) => (
-                      <SelectItem key={p._id} value={p._id}>
-                        {p.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-            {/* Students Multi-Select */}
-            <div className="space-y-2">
-              <Label>Students</Label>
-              <MultiSelect
-                items={students}
-                selectedIds={formData.studentIds}
-                onSelectedChange={(ids) =>
-                  setFormData((p) => ({ ...p, studentIds: ids }))
-                }
-                placeholder="Select students..."
-              />
-            </div>
-            {/* Scheduled Days */}
-            <div className="space-y-2">
-              <Label>Scheduled Days</Label>
-              <MultiSelect
-                items={weekDays.map((d) => ({ _id: d, name: d }))}
-                selectedIds={formData.scheduledDays}
-                onSelectedChange={(days) =>
-                  setFormData((p) => ({ ...p, scheduledDays: days }))
-                }
-                placeholder="Select days..."
-              />
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* Purchase Date */}
-              <div className="space-y-2">
-                <Label>Purchase Date</Label>
-                <Input
-                  type="date"
-                  value={formData.purchaseDate}
-                  onChange={(e) =>
-                    setFormData((p) => ({ ...p, purchaseDate: e.target.value }))
-                  }
-                  required
+                  placeholder="Select students..."
                 />
               </div>
-              {/* Status */}
+              {(formData.enrollmentType === "couple" ||
+                formData.enrollmentType === "group") && (
+                <div className="space-y-2">
+                  <Label>Alias</Label>
+                  <Input
+                    type="text"
+                    value={formData.alias || ""}
+                    onChange={(e) =>
+                      setFormData((p) => ({ ...p, alias: e.target.value }))
+                    }
+                    placeholder="Enter alias..."
+                    maxLength={100}
+                  />
+                </div>
+              )}
               <div className="space-y-2">
-                <Label>Status</Label>
+                <Label>Language</Label>
                 <Select
-                  value={formData.status}
+                  value={formData.language || ""}
                   onValueChange={(v) =>
-                    setFormData((p) => ({ ...p, status: v }))
+                    setFormData((p) => ({ ...p, language: v }))
                   }
                   required
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select status..." />
+                    <SelectValue placeholder="Select language..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="Active">Active</SelectItem>
-                    <SelectItem value="No Active">No Active</SelectItem>
+                    <SelectItem value="English">English</SelectItem>
+                    <SelectItem value="French">French</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label>Scheduled Days</Label>
+                <MultiSelect
+                  items={weekDays.map((d) => ({ _id: d, name: d }))}
+                  selectedIds={formData.scheduledDays}
+                  onSelectedChange={(days) =>
+                    setFormData((p) => ({ ...p, scheduledDays: days }))
+                  }
+                  placeholder="Select days..."
+                />
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Purchase Date</Label>
+                  <Input
+                    type="date"
+                    value={formData.purchaseDate}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        purchaseDate: e.target.value,
+                      }))
+                    }
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Start Date</Label>
+                  <Input
+                    type="date"
+                    value={formData.startDate || ""}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        startDate: e.target.value,
+                      }))
+                    }
+                  />
+                </div>
+              </div>
+              {openDialog === "edit" && (
+                <div className="space-y-2">
+                  <Label>Status</Label>
+                  <Select
+                    value={formData.status?.toString() || ""}
+                    onValueChange={(v) =>
+                      setFormData((p) => ({ ...p, status: parseInt(v) }))
+                    }
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select status..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="1">Active</SelectItem>
+                      <SelectItem value="0">Inactive</SelectItem>
+                      <SelectItem value="2">Paused</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              )}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
+                <div className="space-y-1">
+                  <Label className="text-sm text-muted-foreground">Type</Label>
+                  <p className="font-semibold capitalize">
+                    {formData.enrollmentType}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm text-muted-foreground">
+                    Price/Student
+                  </Label>
+                  <p className="font-semibold">
+                    ${formData.pricePerStudent.toFixed(2)}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-sm text-muted-foreground">
+                    Total Amount
+                  </Label>
+                  <p className="font-semibold">
+                    ${formData.totalAmount.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+              <DialogFooter className="pt-4 border-t">
+                <p className="text-sm text-accent-1 mr-auto">{dialogError}</p>
+                <Button type="button" variant="outline" onClick={handleClose}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting && (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  )}{" "}
+                  Save
+                </Button>
+              </DialogFooter>
+            </form>
+          )}
+
+          {openDialog === "view" && selectedEnrollment && (
+            <div className="space-y-6 max-h-[70vh] overflow-y-auto p-1 pr-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                {(selectedEnrollment.enrollmentType === "couple" ||
+                  selectedEnrollment.enrollmentType === "group") && (
+                  <div>
+                    <Label className="font-semibold">Alias</Label>
+                    <p className="text-sm">
+                      {selectedEnrollment.alias || "N/A"}
+                    </p>
+                  </div>
+                )}
+                <div>
+                  <Label className="font-semibold">Students</Label>
+                  <p className="text-sm">
+                    {selectedEnrollment.studentIds
+                      .map((s) => s.name)
+                      .join(", ")}
+                  </p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Plan</Label>
+                  <p className="text-sm">{selectedEnrollment.planId.name}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Professor</Label>
+                  <p className="text-sm">
+                    {selectedEnrollment.professorId?.name || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Purchase Date</Label>
+                  <p className="text-sm">
+                    {formatDateForDisplay(selectedEnrollment.purchaseDate)}
+                  </p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Status</Label>
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                      selectedEnrollment.status === 1
+                        ? "bg-secondary/20 text-secondary"
+                        : selectedEnrollment.status === 0
+                        ? "bg-accent-1/20 text-accent-1"
+                        : "bg-yellow-100 text-yellow-800"
+                    }`}
+                  >
+                    {selectedEnrollment.status === 1
+                      ? "Active"
+                      : selectedEnrollment.status === 0
+                      ? "Inactive"
+                      : "Paused"}
+                  </span>
+                </div>
+                <div>
+                  <Label className="font-semibold">Start Date</Label>
+                  <p className="text-sm">
+                    {selectedEnrollment.startDate
+                      ? formatDateForDisplay(selectedEnrollment.startDate)
+                      : "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Scheduled Days</Label>
+                  <p className="text-sm">
+                    {selectedEnrollment.scheduledDays
+                      ?.map((d) => d.day)
+                      .join(", ") || "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Language</Label>
+                  <p className="text-sm">
+                    {selectedEnrollment.language || "N/A"}
+                  </p>
+                </div>
+              </div>
+              <div className="grid grid-cols-3 gap-4 p-4 border rounded-md bg-muted/30">
+                <div>
+                  <Label className="font-semibold">Enrollment Type</Label>
+                  <p className="font-semibold capitalize">
+                    {selectedEnrollment.enrollmentType}
+                  </p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Price per Student</Label>
+                  <p className="font-semibold">
+                    ${selectedEnrollment.pricePerStudent.toFixed(2)}
+                  </p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Total Amount</Label>
+                  <p className="font-semibold">
+                    ${selectedEnrollment.totalAmount.toFixed(2)}
+                  </p>
+                </div>
+              </div>
+              <DialogFooter className="pt-4 border-t">
+                <Button variant="outline" onClick={handleClose}>
+                  Close
+                </Button>
+              </DialogFooter>
             </div>
-            {/* Pricing Info */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 border rounded-md">
-              <div className="space-y-1">
-                <Label className="text-sm text-muted-foreground">Type</Label>
-                <p className="font-semibold capitalize">
-                  {formData.enrollmentType}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-sm text-muted-foreground">
-                  Price/Student
-                </Label>
-                <p className="font-semibold">
-                  ${formData.pricePerStudent.toFixed(2)}
-                </p>
-              </div>
-              <div className="space-y-1">
-                <Label className="text-sm text-muted-foreground">
-                  Total Amount
-                </Label>
-                <p className="font-semibold">
-                  ${formData.totalAmount.toFixed(2)}
-                </p>
-              </div>
-            </div>
-            <DialogFooter className="pt-4 border-t">
-              <p className="text-sm text-accent-1 mr-auto">{dialogError}</p>
-              <Button type="button" variant="outline" onClick={handleClose}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                )}{" "}
-                Save
-              </Button>
-            </DialogFooter>
-          </form>
+          )}
         </DialogContent>
       </Dialog>
 
-      {/* --- DIÁLOGO DE STATUS --- */}
       <Dialog
         open={openDialog === "status"}
         onOpenChange={(isOpen) => !isOpen && handleClose()}
@@ -567,7 +845,7 @@ export default function EnrollmentsPage() {
           </DialogHeader>
           <DialogDescription>
             Are you sure you want to{" "}
-            {selectedEnrollment?.isActive ? "deactivate" : "activate"} this
+            {selectedEnrollment?.status === 1 ? "deactivate" : "activate"} this
             enrollment?
           </DialogDescription>
           <DialogFooter>
@@ -576,14 +854,16 @@ export default function EnrollmentsPage() {
               Cancel
             </Button>
             <Button
-              variant={selectedEnrollment?.isActive ? "destructive" : "default"}
+              variant={
+                selectedEnrollment?.status === 1 ? "destructive" : "default"
+              }
               onClick={handleToggleStatus}
               disabled={isSubmitting}
             >
               {isSubmitting && (
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              )}
-              {selectedEnrollment?.isActive ? "Deactivate" : "Activate"}
+              )}{" "}
+              {selectedEnrollment?.status === 1 ? "Deactivate" : "Activate"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -635,7 +915,7 @@ function MultiSelect({
                     <div
                       className="ml-1 rounded-full p-0.5 hover:bg-black/10 dark:hover:bg-white/10"
                       onClick={(e) => {
-                        e.stopPropagation(); // Previene que el popover se cierre
+                        e.stopPropagation();
                         handleSelect(item._id);
                       }}
                     >

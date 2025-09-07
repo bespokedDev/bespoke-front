@@ -28,10 +28,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, FileDown, PlusCircle, Trash2, ArrowLeft } from "lucide-react";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Loader2, FileDown, PlusCircle, Trash2, ArrowLeft, UserPlus } from "lucide-react";
 import { format } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { formatDateForDisplay } from "@/lib/dateUtils";
 
 // --- DEFINICIONES DE TIPOS ---
 
@@ -41,21 +55,29 @@ interface ReportDetail {
   plan: string;
   studentName: string;
   amount: number;
+  amountInDollars: number;
   totalHours: number;
   pricePerHour: number;
   pPerHour: number;
-  hoursSeen: number;
-  balance: number;
+  hoursSeen: number | null;
+  balance: number | null;
   totalTeacher: number;
   totalBespoke: number;
   balanceRemaining: number;
   status: 1 | 2;
+  type: 'normal' | 'substitute' | 'bonus';
+  bonusReason?: string;
 }
 
 interface ProfessorReport {
   professorId: string;
   professorName: string;
   reportDateRange: string;
+  rates: {
+    single: number;
+    couple: number;
+    group: number;
+  };
   details: ReportDetail[];
   subtotals: {
     totalTeacher: number;
@@ -65,23 +87,33 @@ interface ProfessorReport {
 }
 
 interface SpecialReportDetail {
-  enrollmentId: string;
+  enrollmentId: string | null;
   period: string;
   plan: string;
   studentName: string;
   amount: number;
+  amountInDollars: number;
   totalHours: number;
-  hoursSeen: number;
-  oldBalance: number;
-  payment: number;
+  pricePerHour: number;
+  pPerHour: number;
+  hoursSeen: number | null;
+  oldBalance: number | null;
+  payment: number | null;
   total: number;
   balanceRemaining: number;
+  type: 'normal' | 'substitute' | 'bonus';
+  bonusReason?: string;
 }
 
 interface SpecialProfessorReport {
   professorId: string;
   professorName: string;
   reportDateRange: string;
+  rates: {
+    single: number;
+    couple: number;
+    group: number;
+  };
   details: SpecialReportDetail[];
   subtotal: {
     total: number;
@@ -89,25 +121,60 @@ interface SpecialProfessorReport {
   };
 }
 
+interface ExcedentDetail {
+  incomeId: string;
+  deposit_name: string;
+  amount: number;
+  amountInDollars: number;
+  tasa: number;
+  divisa: string;
+  paymentMethod: string;
+  note: string;
+  income_date: string;
+  createdAt: string;
+}
+
+interface ExcedentReport {
+  reportDateRange: string;
+  totalExcedente: number;
+  numberOfIncomes: number;
+  details: ExcedentDetail[];
+}
+
 interface ExcedentRow {
   id: string;
   enrollmentId: string;
   studentName: string;
-  amount: number;
-  hoursSeen: number;
-  pricePerHour: number;
+  amount: number | null;
+  amountInDollars: number | null;
+  hoursSeen: number | null;
+  pricePerHour: number | null;
   total: number;
   notes: string;
 }
 
 interface EnrollmentForSelect {
   _id: string;
-  studentIds: { name: string }[];
+  studentIds: { name: string; alias?: string }[];
+  planId: { name: string };
+  enrollmentType: 'single' | 'couple' | 'group';
+  initialBalance?: number;
+}
+
+interface EnrollmentBalance {
+  enrollmentId: string;
+  studentName: string;
+  planName: string;
+  totalAvailable: number;
+  usedInNormal: number;
+  usedInSubstitutes: number;
+  remaining: number;
 }
 
 interface ReportState {
   general: ProfessorReport[];
   special: SpecialProfessorReport | null;
+  excedente: ExcedentReport | null;
 }
 
 function NewReportComponent() {
@@ -123,6 +190,8 @@ function NewReportComponent() {
   const [isPrinting, setIsPrinting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [enrollments, setEnrollments] = useState<EnrollmentForSelect[]>([]);
+  const [enrollmentBalances, setEnrollmentBalances] = useState<EnrollmentBalance[]>([]);
+  const [openSelectors, setOpenSelectors] = useState<{[key: string]: boolean}>({});
 
   const handleGenerateReport = async (reportMonth: string) => {
     setIsLoading(true);
@@ -133,14 +202,31 @@ function NewReportComponent() {
         `api/incomes/professors-payout-report?month=${reportMonth}`
       );
 
+      console.log("response", response);
+
       const initialGeneralReport = response.report.map((prof: any) => ({
         ...prof,
+        details: prof.details.map((detail: any) => ({
+          ...detail,
+          amountInDollars: detail.amountInDollars || (detail.amount || 0),
+          hoursSeen: null, // Inicializar como null en lugar de 0
+          balance: null,   // Inicializar como null en lugar de 0
+          type: 'normal',  // Tipo por defecto para registros existentes
+        })),
         subtotals: { totalTeacher: 0, totalBespoke: 0, balanceRemaining: 0 },
       }));
 
       const initialSpecialReport = response.specialProfessorReport
         ? {
             ...response.specialProfessorReport,
+            details: response.specialProfessorReport.details.map((detail: any) => ({
+              ...detail,
+              amountInDollars: detail.amountInDollars || (detail.amount || 0),
+              hoursSeen: null,    // Inicializar como null
+              oldBalance: null,   // Inicializar como null
+              payment: null,      // Inicializar como null
+              type: 'normal',     // Tipo por defecto para registros existentes
+            })),
             subtotal: { total: 0, balanceRemaining: 0 },
           }
         : null;
@@ -148,12 +234,380 @@ function NewReportComponent() {
       setReportData({
         general: initialGeneralReport,
         special: initialSpecialReport,
+        excedente: response.excedente || null,
       });
     } catch (err: any) {
       setError(err.message || "Failed to generate report.");
     } finally {
       setIsLoading(false);
     }
+  };
+
+  // Función helper para obtener el valor a mostrar
+  const getFieldValue = (value: number | null | undefined) => {
+    return value === null || value === undefined ? "" : value;
+  };
+
+  // Función helper para obtener el indicador visual del tipo
+  const getTypeIndicator = (type: 'normal' | 'substitute' | 'bonus') => {
+    switch (type) {
+      case 'normal': return '📚'; // Clase normal
+      case 'substitute': return '🔄'; // Suplencia
+      case 'bonus': return '💰'; // Bono manual
+      default: return '';
+    }
+  };
+
+  // Función helper para obtener el balance disponible de un enrollment
+  const getEnrollmentBalance = (enrollmentId: string | null) => {
+    if (!enrollmentId) return 0;
+    const balance = enrollmentBalances.find(b => b.enrollmentId === enrollmentId);
+    return balance?.remaining || 0;
+  };
+
+  // Función helper para formatear el nombre del enrollment
+  const formatEnrollmentName = (enrollment: EnrollmentForSelect) => {
+    const studentName = enrollment.studentIds[0]?.alias || enrollment.studentIds[0]?.name || '';
+    const planName = enrollment.planId.name;
+    const typePrefix = enrollment.enrollmentType === 'single' ? 'S' : 
+                      enrollment.enrollmentType === 'couple' ? 'C' : 'G';
+    return `(${typePrefix} - ${planName}) ${studentName}`;
+  };
+
+  // Función helper para obtener el balance remaining correcto de un enrollment
+  const getCorrectBalanceRemaining = (enrollmentId: string | null, currentAmount: number) => {
+    if (!enrollmentId || !calculatedData) return 0;
+    const enrollment = enrollments.find(e => e._id === enrollmentId);
+    if (!enrollment) return 0;
+    
+    // Buscar el enrollment en los datos CALCULADOS para obtener el balance remaining ACTUAL
+    let currentBalanceRemaining = 0;
+    
+    // Buscar en reportes generales calculados
+    if (calculatedData.generalReport) {
+      calculatedData.generalReport.forEach(prof => {
+        prof.details.forEach(detail => {
+          if (detail.enrollmentId === enrollmentId && detail.type === 'normal') {
+            // Usar el balance remaining calculado dinámicamente
+            currentBalanceRemaining = detail.balanceRemaining || 0;
+          }
+        });
+      });
+    }
+    
+    // Buscar en reporte especial calculado
+    if (calculatedData.specialReport) {
+      calculatedData.specialReport.details.forEach(detail => {
+        if (detail.enrollmentId === enrollmentId && detail.type === 'normal') {
+          // Usar el balance remaining calculado dinámicamente
+          currentBalanceRemaining = detail.balanceRemaining || 0;
+        }
+      });
+    }
+    
+    // Si no se encuentra en los datos calculados, usar el balance inicial del enrollment
+    if (currentBalanceRemaining === 0) {
+      currentBalanceRemaining = enrollment.initialBalance || 0;
+    }
+    
+    return currentBalanceRemaining;
+  };
+
+  // Función helper para obtener el balance disponible considerando todas las suplencias previas
+  const getAvailableBalanceForSubstitute = (enrollmentId: string | null, excludeCurrentSubstitute?: {profIndex: number, detailIndex: number}) => {
+    if (!enrollmentId || !calculatedData) return 0;
+    const enrollment = enrollments.find(e => e._id === enrollmentId);
+    if (!enrollment) return 0;
+    
+    // Obtener el balance remaining de la clase normal
+    let baseBalance = getCorrectBalanceRemaining(enrollmentId, 0);
+    
+    // Restar todas las suplencias previas del mismo enrollment
+    if (calculatedData.generalReport) {
+      calculatedData.generalReport.forEach((prof, profIndex) => {
+        prof.details.forEach((detail, detailIndex) => {
+          if (detail.enrollmentId === enrollmentId && 
+              detail.type === 'substitute' && 
+              !(excludeCurrentSubstitute && excludeCurrentSubstitute.profIndex === profIndex && excludeCurrentSubstitute.detailIndex === detailIndex)) {
+            // Restar el total de la suplencia (hoursSeen * pricePerHour)
+            const substituteTotal = (detail.hoursSeen || 0) * (detail.pricePerHour || 0);
+            baseBalance -= substituteTotal;
+          }
+        });
+      });
+    }
+    
+    if (calculatedData.specialReport) {
+      calculatedData.specialReport.details.forEach((detail, detailIndex) => {
+        if (detail.enrollmentId === enrollmentId && 
+            detail.type === 'substitute' && 
+            !(excludeCurrentSubstitute && excludeCurrentSubstitute.profIndex === -1 && excludeCurrentSubstitute.detailIndex === detailIndex)) {
+          // Restar el total de la suplencia (payment)
+          const substituteTotal = detail.payment || 0;
+          baseBalance -= substituteTotal;
+        }
+      });
+    }
+    
+    return Math.max(0, baseBalance); // No permitir balance negativo
+  };
+
+  // Función helper para obtener el balance disponible considerando suplencias previas (versión mejorada)
+  const getAvailableBalanceForSubstituteV2 = (enrollmentId: string | null, excludeCurrentSubstitute?: {profIndex: number, detailIndex: number}) => {
+    if (!enrollmentId || !reportData) return 0;
+    const enrollment = enrollments.find(e => e._id === enrollmentId);
+    if (!enrollment) return 0;
+    
+    // Obtener el balance remaining de la clase normal desde los datos originales
+    let baseBalance = 0;
+    
+    // Buscar en reportes generales
+    if (reportData.general) {
+      reportData.general.forEach(prof => {
+        prof.details.forEach(detail => {
+          if (detail.enrollmentId === enrollmentId && detail.type === 'normal') {
+            // Calcular el balance remaining basado en las horas vistas
+            const totalHours = detail.totalHours || 0;
+            const hoursSeen = detail.hoursSeen || 0;
+            const pricePerHour = detail.pricePerHour || 0;
+            const amountInDollars = detail.amountInDollars || 0;
+            const balance = detail.balance || 0;
+            
+            // Balance remaining = amount + balance - (hoursSeen * pricePerHour)
+            baseBalance = amountInDollars + balance - (hoursSeen * pricePerHour);
+          }
+        });
+      });
+    }
+    
+    // Buscar en reporte especial
+    if (reportData.special) {
+      reportData.special.details.forEach(detail => {
+        if (detail.enrollmentId === enrollmentId && detail.type === 'normal') {
+          const amountInDollars = detail.amountInDollars || 0;
+          const payment = detail.payment || 0;
+          baseBalance = amountInDollars - payment;
+        }
+      });
+    }
+    
+    // Si no se encuentra, usar el balance inicial del enrollment
+    if (baseBalance === 0) {
+      baseBalance = enrollment.initialBalance || 0;
+    }
+    
+    // Restar todas las suplencias previas del mismo enrollment
+    if (reportData.general) {
+      reportData.general.forEach((prof, profIndex) => {
+        prof.details.forEach((detail, detailIndex) => {
+          if (detail.enrollmentId === enrollmentId && 
+              detail.type === 'substitute' && 
+              !(excludeCurrentSubstitute && excludeCurrentSubstitute.profIndex === profIndex && excludeCurrentSubstitute.detailIndex === detailIndex)) {
+            // Restar el total de la suplencia (hoursSeen * pricePerHour)
+            const substituteTotal = (detail.hoursSeen || 0) * (detail.pricePerHour || 0);
+            baseBalance -= substituteTotal;
+          }
+        });
+      });
+    }
+    
+    if (reportData.special) {
+      reportData.special.details.forEach((detail, detailIndex) => {
+        if (detail.enrollmentId === enrollmentId && 
+            detail.type === 'substitute' && 
+            !(excludeCurrentSubstitute && excludeCurrentSubstitute.profIndex === -1 && excludeCurrentSubstitute.detailIndex === detailIndex)) {
+          // Restar el total de la suplencia (payment)
+          const substituteTotal = detail.payment || 0;
+          baseBalance -= substituteTotal;
+        }
+      });
+    }
+    
+    return Math.max(0, baseBalance); // No permitir balance negativo
+  };
+
+  // Función helper para obtener el pPerHour del profesor actual basado en el tipo de enrollment
+  const getCurrentProfessorPayPerHour = (profIndex: number, enrollmentId: string | null, isSpecial: boolean = false) => {
+    if (!enrollmentId) return 0;
+    
+    // Obtener el enrollment para saber su tipo
+    const enrollment = enrollments.find(e => e._id === enrollmentId);
+    if (!enrollment) return 0;
+    
+    if (isSpecial) {
+      // Para el profesor especial, usar los rates del reporte especial
+      if (reportData?.special?.rates) {
+        return reportData.special.rates[enrollment.enrollmentType] || 0;
+      }
+    } else {
+      // Para profesores generales, usar los rates del profesor específico
+      if (reportData?.general && reportData.general[profIndex]?.rates) {
+        return reportData.general[profIndex].rates[enrollment.enrollmentType] || 0;
+      }
+    }
+    return 0;
+  };
+
+  // Función helper para manejar el selector editable
+  const handleEnrollmentSelect = (enrollmentId: string, profIndex: number, detailIndex: number, isSpecial: boolean = false) => {
+    const selectedEnrollment = enrollments.find(e => e._id === enrollmentId);
+    if (!selectedEnrollment) return;
+
+    // Buscar el enrollment en los datos del reporte para obtener la información completa
+    let enrollmentData: any = null;
+    
+    // Buscar en reportes generales
+    if (reportData?.general) {
+      reportData.general.forEach(prof => {
+        prof.details.forEach(detail => {
+          if (detail.enrollmentId === enrollmentId && detail.type === 'normal') {
+            enrollmentData = detail;
+          }
+        });
+      });
+    }
+    
+    // Buscar en reporte especial
+    if (!enrollmentData && reportData?.special) {
+      reportData.special.details.forEach(detail => {
+        if (detail.enrollmentId === enrollmentId && detail.type === 'normal') {
+          enrollmentData = detail;
+        }
+      });
+    }
+
+    if (isSpecial) {
+      updateSpecialDetailField(detailIndex, "enrollmentId" as any, enrollmentId);
+      updateSpecialDetailField(detailIndex, "studentName" as any, formatEnrollmentName(selectedEnrollment));
+      updateSpecialDetailField(detailIndex, "plan" as any, selectedEnrollment.planId.name);
+      
+      // Llenar campos específicos de suplencia si encontramos los datos del enrollment
+      if (enrollmentData) {
+        updateSpecialDetailField(detailIndex, "totalHours" as any, enrollmentData.totalHours);
+        updateSpecialDetailField(detailIndex, "pricePerHour" as any, enrollmentData.pricePerHour);
+        // pPerHour del profesor especial basado en el tipo de enrollment
+        updateSpecialDetailField(detailIndex, "pPerHour" as any, getCurrentProfessorPayPerHour(profIndex, enrollmentId, true));
+        // amountInDollars no se llena (las suplencias no dependen de ingresos)
+        // balance se llena con el balance disponible considerando suplencias previas
+        updateSpecialDetailField(detailIndex, "balance" as any, getAvailableBalanceForSubstituteV2(enrollmentId, {profIndex: -1, detailIndex}));
+      }
+    } else {
+      updateDetailField(profIndex, detailIndex, "enrollmentId", enrollmentId);
+      updateDetailField(profIndex, detailIndex, "studentName", formatEnrollmentName(selectedEnrollment));
+      updateDetailField(profIndex, detailIndex, "plan", selectedEnrollment.planId.name);
+      
+      // Llenar campos específicos de suplencia si encontramos los datos del enrollment
+      if (enrollmentData) {
+        updateDetailField(profIndex, detailIndex, "totalHours", enrollmentData.totalHours);
+        updateDetailField(profIndex, detailIndex, "pricePerHour", enrollmentData.pricePerHour);
+        // pPerHour del profesor actual que está haciendo la suplencia basado en el tipo de enrollment
+        updateDetailField(profIndex, detailIndex, "pPerHour", getCurrentProfessorPayPerHour(profIndex, enrollmentId, false));
+        // amountInDollars no se llena (las suplencias no dependen de ingresos)
+        // balance se llena con el balance disponible considerando suplencias previas
+        updateDetailField(profIndex, detailIndex, "balance", getAvailableBalanceForSubstituteV2(enrollmentId, {profIndex, detailIndex}));
+      }
+    }
+  };
+
+  // Función para calcular balances dinámicos por enrollment
+  const calculateEnrollmentBalances = () => {
+    const balances: EnrollmentBalance[] = [];
+    
+    enrollments.forEach(enrollment => {
+      let totalUsed = 0;
+      let usedInNormal = 0;
+      let usedInSubstitutes = 0;
+      
+      // Sumar uso en clases normales y suplencias de reportes generales
+      if (reportData?.general) {
+        reportData.general.forEach(prof => {
+          prof.details.forEach(detail => {
+            if (detail.enrollmentId === enrollment._id) {
+              if (detail.type === 'normal') {
+                usedInNormal += detail.amountInDollars || 0;
+              } else if (detail.type === 'substitute') {
+                usedInSubstitutes += detail.amountInDollars || 0;
+              }
+              totalUsed += detail.amountInDollars || 0;
+            }
+          });
+        });
+      }
+      
+      // Sumar uso en reporte especial
+      if (reportData?.special) {
+        reportData.special.details.forEach(detail => {
+          if (detail.enrollmentId === enrollment._id) {
+            if (detail.type === 'normal') {
+              usedInNormal += detail.amountInDollars || 0;
+            } else if (detail.type === 'substitute') {
+              usedInSubstitutes += detail.amountInDollars || 0;
+            }
+            totalUsed += detail.amountInDollars || 0;
+          }
+        });
+      }
+      
+      // Sumar uso en excedentes
+      excedents.forEach(excedent => {
+        if (excedent.enrollmentId === enrollment._id) {
+          totalUsed += excedent.amountInDollars || 0;
+        }
+      });
+      
+      const initialBalance = enrollment.initialBalance || 0;
+      const remaining = initialBalance - totalUsed;
+      
+      balances.push({
+        enrollmentId: enrollment._id,
+        studentName: enrollment.studentIds.map(s => s.name).join(", "),
+        planName: enrollment.planId.name,
+        totalAvailable: initialBalance,
+        usedInNormal,
+        usedInSubstitutes,
+        remaining: Math.max(0, remaining) // No permitir balance negativo
+      });
+    });
+    
+    setEnrollmentBalances(balances);
+    return balances;
+  };
+
+  // Función helper para manejar onChange de inputs numéricos
+  const handleNumberInputChange = (
+    profIndex: number,
+    detailIndex: number,
+    field: keyof ReportDetail,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const value = e.target.value;
+    const numValue = value === "" ? null : Number(value);
+    
+    updateDetailField(profIndex, detailIndex, field, numValue);
+  };
+
+  // Función helper para manejar onChange de inputs numéricos del reporte especial
+  const handleSpecialNumberInputChange = (
+    detailIndex: number,
+    field: keyof SpecialReportDetail,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const value = e.target.value;
+    const numValue = value === "" ? null : Number(value);
+    
+    updateSpecialDetailField(detailIndex, field, numValue);
+  };
+
+  // Función helper para manejar onChange de inputs numéricos de excedentes
+  const handleExcedentNumberInputChange = (
+    rowIndex: number,
+    field: keyof ExcedentRow,
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const value = e.target.value;
+    const numValue = value === "" ? null : Number(value);
+    
+    updateExcedentField(rowIndex, field, numValue);
   };
 
   useEffect(() => {
@@ -165,6 +619,13 @@ function NewReportComponent() {
       setIsLoading(false);
     }
   }, [month]);
+
+  // Recalcular balances cuando cambien los datos
+  useEffect(() => {
+    if (reportData && enrollments.length > 0) {
+      calculateEnrollmentBalances();
+    }
+  }, [reportData, excedents, enrollments]);
 
   const calculatedData = useMemo(() => {
     if (!reportData) return null;
@@ -182,12 +643,12 @@ function NewReportComponent() {
           totalBespoke = 0,
           balanceRemaining = 0;
         if (detail.status === 1) {
-          totalTeacher = detail.hoursSeen * detail.pPerHour;
-          totalBespoke = detail.pricePerHour * detail.hoursSeen - totalTeacher;
+          totalTeacher = (detail.hoursSeen || 0) * detail.pPerHour;
+          totalBespoke = detail.pricePerHour * (detail.hoursSeen || 0) - totalTeacher;
           balanceRemaining =
-            detail.amount + detail.balance - totalTeacher - totalBespoke;
+            (detail.amountInDollars || 0) + (detail.balance || 0) - totalTeacher - totalBespoke;
         } else {
-          totalTeacher = detail.amount;
+          totalTeacher = detail.amountInDollars || 0;
           totalBespoke = 0;
           balanceRemaining = 0;
         }
@@ -216,8 +677,8 @@ function NewReportComponent() {
       let subTotalBalanceRemaining = 0;
 
       const updatedDetails = reportData.special.details.map((detail) => {
-        const total = detail.payment;
-        const balanceRemaining = detail.amount - detail.payment;
+        const total = detail.payment || 0;
+        const balanceRemaining = (detail.amountInDollars || 0) - (detail.payment || 0);
         subTotal += total;
         subTotalBalanceRemaining += balanceRemaining;
         return { ...detail, total, balanceRemaining };
@@ -233,10 +694,7 @@ function NewReportComponent() {
       };
     }
 
-    const excedentsTotal = excedents.reduce(
-      (acc, excedent) => acc + excedent.total,
-      0
-    );
+    const excedentsTotal = reportData.excedente?.totalExcedente || 0;
 
     const specialBalanceRemaining =
       updatedSpecialReport?.subtotal.balanceRemaining || 0;
@@ -294,17 +752,47 @@ function NewReportComponent() {
       plan: "N/A",
       studentName: "Bono Manual",
       amount: 0,
+      amountInDollars: 0,
       totalHours: 0,
       pricePerHour: 0,
       pPerHour: 0,
-      hoursSeen: 0,
-      balance: 0,
+      hoursSeen: null,
+      balance: null,
       totalTeacher: 0,
       totalBespoke: 0,
       balanceRemaining: 0,
       status: 2,
+      type: 'bonus',
+      bonusReason: '',
     };
     newData.general[profIndex].details.push(newBonus);
+    setReportData(newData);
+  };
+
+  const addSubstitute = (profIndex: number) => {
+    if (!reportData) return;
+    const newData = { ...reportData };
+    const reportPeriod = newData.general[profIndex]?.reportDateRange || "N/A";
+    const periodWithoutYear = reportPeriod.replace(/\s\d{4}/g, "");
+    const newSubstitute: ReportDetail = {
+      enrollmentId: "",
+      period: periodWithoutYear,
+      plan: "",
+      studentName: "",
+      amount: 0,
+      amountInDollars: 0,
+      totalHours: 0,
+      pricePerHour: 0,
+      pPerHour: 0,
+      hoursSeen: null,
+      balance: null,
+      totalTeacher: 0,
+      totalBespoke: 0,
+      balanceRemaining: 0,
+      status: 1,
+      type: 'substitute',
+    };
+    newData.general[profIndex].details.push(newSubstitute);
     setReportData(newData);
   };
 
@@ -317,14 +805,90 @@ function NewReportComponent() {
     }
   };
 
+  const addSpecialBonus = () => {
+    if (!reportData?.special) return;
+    const newData = { ...reportData };
+    const reportPeriod = newData.special?.reportDateRange || "N/A";
+    const periodWithoutYear = reportPeriod.replace(/\s\d{4}/g, "");
+    const newBonus: SpecialReportDetail = {
+      enrollmentId: null,
+      period: periodWithoutYear,
+      plan: "N/A",
+      studentName: "Bono Manual",
+      amount: 0,
+      amountInDollars: 0,
+      totalHours: 0,
+      pricePerHour: 0,
+      pPerHour: 0,
+      hoursSeen: null,
+      oldBalance: null,
+      payment: null,
+      total: 0,
+      balanceRemaining: 0,
+      type: 'bonus',
+      bonusReason: '',
+    };
+    if (newData.special) {
+      newData.special.details.push(newBonus);
+    }
+    setReportData(newData);
+  };
+
+  const addSpecialSubstitute = () => {
+    if (!reportData?.special) return;
+    const newData = { ...reportData };
+    const reportPeriod = newData.special?.reportDateRange || "N/A";
+    const periodWithoutYear = reportPeriod.replace(/\s\d{4}/g, "");
+    const newSubstitute: SpecialReportDetail = {
+      enrollmentId: "",
+      period: periodWithoutYear,
+      plan: "",
+      studentName: "",
+      amount: 0,
+      amountInDollars: 0,
+      totalHours: 0,
+      pricePerHour: 0,
+      pPerHour: 0,
+      hoursSeen: null,
+      oldBalance: null,
+      payment: null,
+      total: 0,
+      balanceRemaining: 0,
+      type: 'substitute',
+    };
+    if (newData.special) {
+      newData.special.details.push(newSubstitute);
+    }
+    setReportData(newData);
+  };
+
+  const removeSpecialBonus = (detailIndex: number) => {
+    if (!reportData?.special) return;
+    const newData = { ...reportData };
+    if (newData.special?.details) {
+      newData.special.details.splice(detailIndex, 1);
+      setReportData(newData);
+    }
+  };
+
+  const removeSpecialSubstitute = (detailIndex: number) => {
+    if (!reportData?.special) return;
+    const newData = { ...reportData };
+    if (newData.special?.details) {
+      newData.special.details.splice(detailIndex, 1);
+      setReportData(newData);
+    }
+  };
+
   const addExcedentRow = () => {
     const newRow: ExcedentRow = {
       id: crypto.randomUUID(),
       enrollmentId: "",
       studentName: "",
-      amount: 0,
-      hoursSeen: 0,
-      pricePerHour: 0,
+      amount: null,
+      amountInDollars: null,
+      hoursSeen: null,
+      pricePerHour: null,
       total: 0,
       notes: "",
     };
@@ -339,12 +903,12 @@ function NewReportComponent() {
     const newExcedents = [...excedents];
     const currentRow = newExcedents[rowIndex];
     (currentRow[field] as any) = value;
+    
     if (field === "enrollmentId") {
       const selectedEnrollment = enrollments.find((e) => e._id === value);
-      currentRow.studentName =
-        selectedEnrollment?.studentIds.map((s) => s.name).join(", ") || "";
+      currentRow.studentName = selectedEnrollment ? formatEnrollmentName(selectedEnrollment) : "";
     }
-    currentRow.total = currentRow.hoursSeen * currentRow.pricePerHour;
+    currentRow.total = (currentRow.hoursSeen || 0) * (currentRow.pricePerHour || 0);
     setExcedents(newExcedents);
   };
 
@@ -394,6 +958,7 @@ function NewReportComponent() {
               "Hrs Seen",
               "Pay/Hr",
               "Balance",
+              "Type",
               "T. Teacher",
               "T. Bespoke",
               "Bal. Rem.",
@@ -403,12 +968,13 @@ function NewReportComponent() {
             d.period,
             d.plan,
             d.studentName,
-            `$${d.amount.toFixed(2)}`,
+            `$${(d.amountInDollars || 0).toFixed(2)}`,
             d.totalHours,
             `$${d.pricePerHour.toFixed(2)}`,
-            d.hoursSeen,
+            d.hoursSeen || "",
             `$${d.pPerHour.toFixed(2)}`,
-            `$${d.balance.toFixed(2)}`,
+            `$${(d.balance || 0).toFixed(2)}`,
+            d.type === 'normal' ? 'Normal' : d.type === 'substitute' ? 'Substitute' : 'Bonus',
             `$${d.totalTeacher.toFixed(2)}`,
             `$${d.totalBespoke.toFixed(2)}`,
             `$${d.balanceRemaining.toFixed(2)}`,
@@ -418,7 +984,7 @@ function NewReportComponent() {
               // MODIFICACIÓN: Se corrige 'textAlign' por 'halign'
               {
                 content: "Subtotals",
-                colSpan: 9,
+                colSpan: 10,
                 styles: { halign: "right", fontStyle: "bold" },
               },
               `$${prof.subtotals.totalTeacher.toFixed(2)}`,
@@ -456,25 +1022,29 @@ function NewReportComponent() {
           startY: finalY,
           head: [
             [
-              "Student",
+              "Period",
               "Plan",
+              "Student",
               "Amount",
               "Total Hrs",
               "Hrs Seen",
-              "Old Bal.",
+              "Balance",
               "Payment",
+              "Type",
               "Total",
               "Bal. Rem.",
             ],
           ],
           body: calculatedData.specialReport.details.map((d) => [
-            d.studentName,
+            d.period,
             d.plan,
-            `$${d.amount.toFixed(2)}`,
+            d.studentName,
+            `$${(d.amountInDollars || 0).toFixed(2)}`,
             d.totalHours,
-            d.hoursSeen,
-            `$${d.oldBalance.toFixed(2)}`,
-            `$${d.payment.toFixed(2)}`,
+            d.hoursSeen || "",
+            `$${(d.oldBalance || 0).toFixed(2)}`,
+            `$${(d.payment || 0).toFixed(2)}`,
+            d.type === 'normal' ? 'Normal' : d.type === 'substitute' ? 'Substitute' : 'Bonus',
             `$${d.total.toFixed(2)}`,
             `$${d.balanceRemaining.toFixed(2)}`,
           ]),
@@ -483,7 +1053,7 @@ function NewReportComponent() {
               // MODIFICACIÓN: Se corrige 'textAlign' por 'halign'
               {
                 content: "Subtotals",
-                colSpan: 7,
+                colSpan: 9,
                 styles: { halign: "right", fontStyle: "bold" },
               },
               `$${calculatedData.specialReport.subtotal.total.toFixed(2)}`,
@@ -521,9 +1091,9 @@ function NewReportComponent() {
           ],
           body: excedents.map((e) => [
             e.studentName,
-            `$${e.amount.toFixed(2)}`,
-            e.hoursSeen,
-            `$${e.pricePerHour.toFixed(2)}`,
+            `$${(e.amountInDollars || 0).toFixed(2)}`,
+            e.hoursSeen || "",
+            `$${(e.pricePerHour || 0).toFixed(2)}`,
             `$${e.total.toFixed(2)}`,
             e.notes,
           ]),
@@ -591,6 +1161,10 @@ function NewReportComponent() {
       report: calculatedData.generalReport,
       specialProfessorReport: calculatedData.specialReport,
       excedents: { rows: excedents, total: calculatedData.excedentsTotal },
+      enrollmentBalances: enrollmentBalances.map(balance => ({
+        enrollmentId: balance.enrollmentId,
+        balanceRemaining: balance.remaining
+      })),
       summary: {
         systemTotal: calculatedData.summary.systemTotal,
         realTotal: realTotal,
@@ -668,6 +1242,7 @@ function NewReportComponent() {
                       <TableHead className="w-[110px]">Hours Seen</TableHead>
                       <TableHead className="w-[110px]">Pay/Hour</TableHead>
                       <TableHead className="w-[110px]">Balance</TableHead>
+                      <TableHead>Type</TableHead>
                       <TableHead className="text-right">
                         Total Teacher
                       </TableHead>
@@ -685,7 +1260,7 @@ function NewReportComponent() {
                       >
                         <TableCell className="px-3">{detail.period}</TableCell>
                         <TableCell>
-                          {detail.status === 1 ? (
+                          {detail.type === 'normal' ? (
                             <span className="px-1">{detail.plan}</span>
                           ) : (
                             <Input
@@ -702,10 +1277,59 @@ function NewReportComponent() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {detail.status === 1 ? (
+                          {detail.type === 'normal' ? (
                             <span className="font-medium px-1">
                               {detail.studentName}
                             </span>
+                          ) : detail.type === 'substitute' ? (
+                            <Popover
+                              open={openSelectors[`general-${profIndex}-${detailIndex}`] || false}
+                              onOpenChange={(open) => 
+                                setOpenSelectors(prev => ({
+                                  ...prev,
+                                  [`general-${profIndex}-${detailIndex}`]: open
+                                }))
+                              }
+                            >
+                              <PopoverTrigger asChild>
+                                <Button
+                                  variant="outline"
+                                  role="combobox"
+                                  aria-expanded={openSelectors[`general-${profIndex}-${detailIndex}`]}
+                                  className="w-full justify-between"
+                                >
+                                  {detail.enrollmentId ? 
+                                    formatEnrollmentName(enrollments.find(e => e._id === detail.enrollmentId)!) :
+                                    "Search student..."
+                                  }
+                                </Button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-full p-0">
+                                <Command>
+                                  <CommandInput placeholder="Search student..." />
+                                  <CommandList>
+                                    <CommandEmpty>No student found.</CommandEmpty>
+                                    <CommandGroup>
+                                      {enrollments.map((enrollment) => (
+                                        <CommandItem
+                                          key={enrollment._id}
+                                          value={formatEnrollmentName(enrollment)}
+                                          onSelect={() => {
+                                            handleEnrollmentSelect(enrollment._id, profIndex, detailIndex, false);
+                                            setOpenSelectors(prev => ({
+                                              ...prev,
+                                              [`general-${profIndex}-${detailIndex}`]: false
+                                            }));
+                                          }}
+                                        >
+                                          {formatEnrollmentName(enrollment)}
+                                        </CommandItem>
+                                      ))}
+                                    </CommandGroup>
+                                  </CommandList>
+                                </Command>
+                              </PopoverContent>
+                            </Popover>
                           ) : (
                             <Input
                               value={detail.studentName}
@@ -723,86 +1347,100 @@ function NewReportComponent() {
                         <TableCell>
                           <Input
                             type="number"
-                            value={detail.amount}
+                            value={getFieldValue(detail.amountInDollars)}
                             onChange={(e) =>
-                              updateDetailField(
+                              handleNumberInputChange(
                                 profIndex,
                                 detailIndex,
-                                "amount",
-                                Number(e.target.value)
+                                "amountInDollars",
+                                e
                               )
                             }
+                            placeholder="0.00"
                           />
                         </TableCell>
                         <TableCell>
                           <Input
                             type="number"
-                            value={detail.totalHours}
+                            value={getFieldValue(detail.totalHours)}
                             onChange={(e) =>
-                              updateDetailField(
+                              handleNumberInputChange(
                                 profIndex,
                                 detailIndex,
                                 "totalHours",
-                                Number(e.target.value)
+                                e
                               )
                             }
+                            placeholder="0"
                           />
                         </TableCell>
                         <TableCell>
                           <Input
                             type="number"
-                            value={detail.pricePerHour}
+                            value={getFieldValue(detail.pricePerHour)}
                             onChange={(e) =>
-                              updateDetailField(
+                              handleNumberInputChange(
                                 profIndex,
                                 detailIndex,
                                 "pricePerHour",
-                                Number(e.target.value)
+                                e
                               )
                             }
+                            placeholder="0.00"
                           />
                         </TableCell>
                         <TableCell>
                           <Input
                             type="number"
-                            value={detail.hoursSeen}
+                            value={getFieldValue(detail.hoursSeen)}
                             onChange={(e) =>
-                              updateDetailField(
+                              handleNumberInputChange(
                                 profIndex,
                                 detailIndex,
                                 "hoursSeen",
-                                Number(e.target.value)
+                                e
                               )
                             }
+                            placeholder="0"
                           />
                         </TableCell>
                         <TableCell>
                           <Input
                             type="number"
-                            value={detail.pPerHour}
+                            value={getFieldValue(detail.pPerHour)}
                             onChange={(e) =>
-                              updateDetailField(
+                              handleNumberInputChange(
                                 profIndex,
                                 detailIndex,
                                 "pPerHour",
-                                Number(e.target.value)
+                                e
                               )
                             }
+                            placeholder="0.00"
                           />
                         </TableCell>
                         <TableCell>
                           <Input
                             type="number"
-                            value={detail.balance}
+                            value={getFieldValue(detail.balance)}
                             onChange={(e) =>
-                              updateDetailField(
+                              handleNumberInputChange(
                                 profIndex,
                                 detailIndex,
                                 "balance",
-                                Number(e.target.value)
+                                e
                               )
                             }
+                            placeholder="0.00"
                           />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className="text-lg" title={
+                            detail.type === 'normal' ? 'Clase Normal' :
+                            detail.type === 'substitute' ? 'Suplencia' : 'Bono Manual'
+                          }>
+                            {getTypeIndicator(detail.type)}
+                          </span>
                         </TableCell>
                         <TableCell className="text-right font-medium">
                           {detail.totalTeacher.toFixed(2)}
@@ -814,12 +1452,14 @@ function NewReportComponent() {
                           {detail.balanceRemaining.toFixed(2)}
                         </TableCell>
                         <TableCell>
-                          {detail.status === 2 && (
+                          {(detail.type === 'bonus' || detail.type === 'substitute') && (
                             <Button
                               variant="ghost"
                               size="icon"
                               onClick={() =>
-                                removeBonus(profIndex, detailIndex)
+                                detail.type === 'bonus' ? 
+                                  removeBonus(profIndex, detailIndex) :
+                                  removeBonus(profIndex, detailIndex) // TODO: Crear removeSubstitute
                               }
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />
@@ -831,15 +1471,25 @@ function NewReportComponent() {
                   </TableBody>
                   <TableFooter>
                     <TableRow>
-                      <TableCell colSpan={9}>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => addBonus(profIndex)}
-                        >
-                          <PlusCircle className="h-4 w-4 mr-2" />
-                          Add Bonus
-                        </Button>
+                      <TableCell colSpan={10}>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => addSubstitute(profIndex)}
+                          >
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            Add Substitute
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => addBonus(profIndex)}
+                          >
+                            <PlusCircle className="h-4 w-4 mr-2" />
+                            Add Bonus
+                          </Button>
+                        </div>
                       </TableCell>
                       <TableCell className="text-right font-bold text-base">
                         {profReport.subtotals.totalTeacher.toFixed(2)}
@@ -871,71 +1521,206 @@ function NewReportComponent() {
                 <Table className="min-w-max">
                   <TableHeader>
                     <TableRow>
-                      <TableHead className="w-[180px]">Student</TableHead>
+                      <TableHead className="w-[160px]">Period</TableHead>
                       <TableHead className="w-[150px]">Plan</TableHead>
-                      <TableHead className="w-[110px]">Amount</TableHead>
-                      <TableHead className="w-[110px]">Total Hours</TableHead>
-                      <TableHead className="w-[110px]">Hours Seen</TableHead>
-                      <TableHead className="w-[110px]">Old Balance</TableHead>
-                      <TableHead className="w-[110px]">Payment</TableHead>
-                      <TableHead className="text-right">Total</TableHead>
-                      <TableHead className="text-right">Balance Rem.</TableHead>
+                      <TableHead className="w-[200px]">Student</TableHead>
+                      <TableHead className="w-[120px]">Amount</TableHead>
+                      <TableHead className="w-[120px]">Total Hours</TableHead>
+                      <TableHead className="w-[120px]">Hours Seen</TableHead>
+                      <TableHead className="w-[120px]">Balance</TableHead>
+                      <TableHead className="w-[120px]">Payment</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead>Total</TableHead>
+                      <TableHead>Balance Rem.</TableHead>
+                      <TableHead className="w-[60px]">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {calculatedData.specialReport.details.map(
                       (detail, detailIndex) => (
                         <TableRow key={detail.enrollmentId}>
-                          <TableCell className="font-medium">
-                            {detail.studentName}
+                          <TableCell className="px-3">{detail.period}</TableCell>
+                          <TableCell>
+                            {detail.type === 'normal' ? (
+                              <span className="px-1">{detail.plan}</span>
+                            ) : (
+                              <Input
+                                value={detail.plan}
+                                onChange={(e) =>
+                                  handleSpecialNumberInputChange(
+                                    detailIndex,
+                                    "plan" as any,
+                                    e as any
+                                  )
+                                }
+                              />
+                            )}
                           </TableCell>
-                          <TableCell>{detail.plan}</TableCell>
-                          <TableCell>${detail.amount.toFixed(2)}</TableCell>
-                          <TableCell>{detail.totalHours}</TableCell>
+                          <TableCell>
+                            {detail.type === 'normal' ? (
+                              <span className="font-medium px-1">
+                                {detail.studentName}
+                              </span>
+                            ) : detail.type === 'substitute' ? (
+                              <Popover
+                                open={openSelectors[`special-${detailIndex}`] || false}
+                                onOpenChange={(open) => 
+                                  setOpenSelectors(prev => ({
+                                    ...prev,
+                                    [`special-${detailIndex}`]: open
+                                  }))
+                                }
+                              >
+                                <PopoverTrigger asChild>
+                                  <Button
+                                    variant="outline"
+                                    role="combobox"
+                                    aria-expanded={openSelectors[`special-${detailIndex}`]}
+                                    className="w-full justify-between"
+                                  >
+                                    {detail.enrollmentId ? 
+                                      formatEnrollmentName(enrollments.find(e => e._id === detail.enrollmentId)!) :
+                                      "Search student..."
+                                    }
+                                  </Button>
+                                </PopoverTrigger>
+                                <PopoverContent className="w-full p-0">
+                                  <Command>
+                                    <CommandInput placeholder="Search student..." />
+                                    <CommandList>
+                                      <CommandEmpty>No student found.</CommandEmpty>
+                                      <CommandGroup>
+                                        {enrollments.map((enrollment) => (
+                                          <CommandItem
+                                            key={enrollment._id}
+                                            value={formatEnrollmentName(enrollment)}
+                                            onSelect={() => {
+                                              handleEnrollmentSelect(enrollment._id, 0, detailIndex, true);
+                                              setOpenSelectors(prev => ({
+                                                ...prev,
+                                                [`special-${detailIndex}`]: false
+                                              }));
+                                            }}
+                                          >
+                                            {formatEnrollmentName(enrollment)}
+                                          </CommandItem>
+                                        ))}
+                                      </CommandGroup>
+                                    </CommandList>
+                                  </Command>
+                                </PopoverContent>
+                              </Popover>
+                            ) : (
+                              <Input
+                                value={detail.studentName}
+                                onChange={(e) =>
+                                  handleSpecialNumberInputChange(
+                                    detailIndex,
+                                    "studentName" as any,
+                                    e as any
+                                  )
+                                }
+                              />
+                            )}
+                          </TableCell>
                           <TableCell>
                             <Input
                               type="number"
-                              value={detail.hoursSeen}
+                              value={getFieldValue(detail.amountInDollars)}
                               onChange={(e) =>
-                                updateSpecialDetailField(
+                                handleSpecialNumberInputChange(
+                                  detailIndex,
+                                  "amountInDollars",
+                                  e
+                                )
+                              }
+                              placeholder="0.00"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              value={getFieldValue(detail.totalHours)}
+                              onChange={(e) =>
+                                handleSpecialNumberInputChange(
+                                  detailIndex,
+                                  "totalHours",
+                                  e
+                                )
+                              }
+                              placeholder="0"
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <Input
+                              type="number"
+                              value={getFieldValue(detail.hoursSeen)}
+                              onChange={(e) =>
+                                handleSpecialNumberInputChange(
                                   detailIndex,
                                   "hoursSeen",
-                                  Number(e.target.value)
+                                  e
                                 )
                               }
+                              placeholder="0"
                             />
                           </TableCell>
                           <TableCell>
                             <Input
                               type="number"
-                              value={detail.oldBalance}
+                              value={getFieldValue(detail.oldBalance)}
                               onChange={(e) =>
-                                updateSpecialDetailField(
+                                handleSpecialNumberInputChange(
                                   detailIndex,
                                   "oldBalance",
-                                  Number(e.target.value)
+                                  e
                                 )
                               }
+                              placeholder="0.00"
                             />
                           </TableCell>
                           <TableCell>
                             <Input
                               type="number"
-                              value={detail.payment}
+                              value={getFieldValue(detail.payment)}
                               onChange={(e) =>
-                                updateSpecialDetailField(
+                                handleSpecialNumberInputChange(
                                   detailIndex,
                                   "payment",
-                                  Number(e.target.value)
+                                  e
                                 )
                               }
+                              placeholder="0.00"
                             />
+                          </TableCell>
+                          <TableCell className="text-center">
+                            <span className="text-lg" title={
+                              detail.type === 'normal' ? 'Clase Normal' :
+                              detail.type === 'substitute' ? 'Suplencia' : 'Bono Manual'
+                            }>
+                              {getTypeIndicator(detail.type)}
+                            </span>
                           </TableCell>
                           <TableCell className="text-right font-medium">
                             ${detail.total.toFixed(2)}
                           </TableCell>
                           <TableCell className="text-right font-bold">
-                            ${detail.balanceRemaining.toFixed(2)}
+                            {detail.balanceRemaining.toFixed(2)}
+                          </TableCell>
+                          <TableCell>
+                            {(detail.type === 'bonus' || detail.type === 'substitute') && (
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                onClick={() =>
+                                  detail.type === 'bonus' ? 
+                                    removeSpecialBonus(detailIndex) :
+                                    removeSpecialSubstitute(detailIndex)
+                                }
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            )}
                           </TableCell>
                         </TableRow>
                       )
@@ -943,22 +1728,33 @@ function NewReportComponent() {
                   </TableBody>
                   <TableFooter>
                     <TableRow>
-                      <TableCell
-                        colSpan={7}
-                        className="text-right font-bold text-base"
-                      >
-                        Subtotals
+                      <TableCell colSpan={9}>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => addSpecialSubstitute()}
+                          >
+                            <UserPlus className="h-4 w-4 mr-2" />
+                            Add Substitute
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => addSpecialBonus()}
+                          >
+                            <PlusCircle className="h-4 w-4 mr-2" />
+                            Add Bonus
+                          </Button>
+                        </div>
                       </TableCell>
                       <TableCell className="text-right font-bold text-base">
-                        $
-                        {calculatedData.specialReport.subtotal.total.toFixed(2)}
+                        ${calculatedData.specialReport.subtotal.total.toFixed(2)}
                       </TableCell>
                       <TableCell className="text-right font-bold text-base text-blue-600">
-                        $
-                        {calculatedData.specialReport.subtotal.balanceRemaining.toFixed(
-                          2
-                        )}
+                        ${calculatedData.specialReport.subtotal.balanceRemaining.toFixed(2)}
                       </TableCell>
+                      <TableCell></TableCell>
                     </TableRow>
                   </TableFooter>
                 </Table>
@@ -967,134 +1763,52 @@ function NewReportComponent() {
           </Card>
         )}
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Excedents</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[250px]">
-                    Student (from Enrollment)
-                  </TableHead>
-                  <TableHead>Amount</TableHead>
-                  <TableHead>Hours Seen</TableHead>
-                  <TableHead>Price Per Hour</TableHead>
-                  <TableHead className="text-right">Total</TableHead>
-                  <TableHead>Notes</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {excedents.map((row, index) => (
-                  <TableRow key={row.id}>
-                    <TableCell>
-                      <Select
-                        value={row.enrollmentId}
-                        onValueChange={(v) =>
-                          updateExcedentField(index, "enrollmentId", v)
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {enrollments.map((e) => (
-                            <SelectItem key={e._id} value={e._id}>
-                              {e.studentIds.map((s) => s.name).join(", ")}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        value={row.amount}
-                        onChange={(e) =>
-                          updateExcedentField(
-                            index,
-                            "amount",
-                            Number(e.target.value)
-                          )
-                        }
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        value={row.hoursSeen}
-                        onChange={(e) =>
-                          updateExcedentField(
-                            index,
-                            "hoursSeen",
-                            Number(e.target.value)
-                          )
-                        }
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        type="number"
-                        value={row.pricePerHour}
-                        onChange={(e) =>
-                          updateExcedentField(
-                            index,
-                            "pricePerHour",
-                            Number(e.target.value)
-                          )
-                        }
-                      />
-                    </TableCell>
-                    <TableCell className="text-right font-medium">
-                      {row.total.toFixed(2)}
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        value={row.notes}
-                        onChange={(e) =>
-                          updateExcedentField(index, "notes", e.target.value)
-                        }
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => removeExcedentRow(row.id)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </TableCell>
+        {reportData?.excedente && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Excedents</CardTitle>
+              <p className="text-sm text-muted-foreground">
+                {reportData.excedente.reportDateRange} - {reportData.excedente.numberOfIncomes} incomes
+              </p>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Deposit Name</TableHead>
+                    <TableHead>Amount</TableHead>
+                    <TableHead>Currency</TableHead>
+                    <TableHead>Amount (USD)</TableHead>
+                    <TableHead>Payment Method</TableHead>
+                    <TableHead>Note</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-              <TableFooter>
-                <TableRow>
-                  <TableCell colSpan={7}>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={addExcedentRow}
-                    >
-                      <PlusCircle className="h-4 w-4 mr-2" />
-                      Add Excedent
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              </TableFooter>
-            </Table>
-          </CardContent>
-          <CardFooter className="flex justify-end font-bold text-lg">
-            Total Excedents: ${calculatedData.excedentsTotal.toFixed(2)}
-          </CardFooter>
-        </Card>
+                </TableHeader>
+                <TableBody>
+                  {reportData.excedente.details.map((detail, index) => (
+                    <TableRow key={detail.incomeId}>
+                      <TableCell>{formatDateForDisplay(detail.income_date)}</TableCell>
+                      <TableCell>{detail.deposit_name}</TableCell>
+                      <TableCell>{detail.amount.toFixed(2)}</TableCell>
+                      <TableCell>{detail.divisa}</TableCell>
+                      <TableCell>${detail.amountInDollars.toFixed(2)}</TableCell>
+                      <TableCell>{detail.paymentMethod}</TableCell>
+                      <TableCell>{detail.note}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+            <CardFooter className="flex justify-end font-bold text-lg">
+              Total Excedents: ${reportData.excedente.totalExcedente.toFixed(2)}
+            </CardFooter>
+          </Card>
+        )}
         <Card className="max-w-md ml-auto">
           <CardHeader>
             <CardTitle>Final Summary</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 pt-6">
+          <CardContent className="space-y-4">
             <div className="flex justify-between items-center">
               <Label>Total Balance Remaining:</Label>
               <span className="font-semibold">
@@ -1107,7 +1821,7 @@ function NewReportComponent() {
             <div className="flex justify-between items-center">
               <Label>Total Excedents:</Label>
               <span className="font-semibold">
-                ${calculatedData.excedentsTotal.toFixed(2)}
+                ${(reportData?.excedente?.totalExcedente || 0).toFixed(2)}
               </span>
             </div>
             <div className="flex justify-between items-center border-t pt-4">

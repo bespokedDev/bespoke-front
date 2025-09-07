@@ -18,6 +18,8 @@ import {
   Landmark, // Icono para Contabilidad
   ArrowRightLeft,
   FileChartColumn, // Icono para Ingresos
+  BookOpen, // Icono para Plans
+  CreditCard, // Icono para Payment Methods
 } from "lucide-react";
 
 // --- NUEVA ESTRUCTURA DE NAVEGACIÓN ---
@@ -25,6 +27,8 @@ const navItems = [
   { title: "Dashboard", href: "/", icon: LayoutDashboard },
   { title: "Teachers", href: "/teachers", icon: UserCircle },
   { title: "Students", href: "/students", icon: Users },
+  { title: "Plans", href: "/plans", icon: BookOpen },
+  { title: "Payment Methods", href: "/payment-methods", icon: CreditCard },
   { title: "Enrollments", href: "/enrollments", icon: FileBadge },
   // Nuevo grupo para Contabilidad
   {
@@ -63,7 +67,7 @@ export function SidebarNav() {
       <div className="flex items-center justify-between px-4 py-4">
         {!collapsed && (
           <div className="flex items-center gap-2">
-            <Image src="/logo.png" alt="Logo" width={32} height={32} />
+            {/*<Image src="/logo.png" alt="Logo" width={32} height={32} />*/}
             <span className="font-bold text-lg">Bespoke</span>
           </div>
         )}

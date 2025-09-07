@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { apiClient } from "@/lib/api";
+import { formatDateForDisplay, getCurrentDateString, extractDatePart } from "@/lib/dateUtils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -25,7 +26,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DataTable } from "@/components/ui/data-table";
-import { Plus, Pencil, Ban, CheckCircle2, Loader2, Trash2 } from "lucide-react";
+import { Plus, Pencil, Ban, CheckCircle2, Loader2, Trash2, Eye, ArrowUpDown } from "lucide-react";
+import type { ColumnDef } from "@tanstack/react-table";
 
 // --- DEFINICIONES DE TIPOS ---
 interface Note {
@@ -47,18 +49,14 @@ interface Student {
   city: string;
   country: string;
   occupation: string;
-  enrollmentDate: string;
-  language: string;
-  startDate: string;
-  status: string;
+  status: number; // 0=inactivo, 1=activo, 2=pausa
   notes: Note[];
-  isActive: boolean;
 }
 
 type StudentFormData = Omit<
   Student,
   | "_id"
-  | "isActive"
+  | "studentCode"
   | "disenrollmentDate"
   | "disenrollmentReason"
   | "createdAt"
@@ -68,7 +66,6 @@ type StudentFormData = Omit<
 
 // --- ESTADO INICIAL ---
 const initialStudentState: StudentFormData = {
-  studentCode: "",
   name: "",
   dob: "",
   gender: "",
@@ -79,10 +76,7 @@ const initialStudentState: StudentFormData = {
   city: "",
   country: "",
   occupation: "",
-  enrollmentDate: "",
-  language: "",
-  startDate: "",
-  status: "",
+  status: 1, // Por defecto activo
   notes: [],
 };
 
@@ -90,7 +84,7 @@ const initialStudentState: StudentFormData = {
 const formatDateForInput = (dateString?: string | null) => {
   if (!dateString) return "";
   try {
-    return new Date(dateString).toISOString().split("T")[0];
+    return extractDatePart(dateString);
   } catch (e) {
     console.log("error: ", e);
     return "";
@@ -104,7 +98,7 @@ export default function StudentsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [openDialog, setOpenDialog] = useState<
-    "create" | "edit" | "status" | null
+    "create" | "edit" | "status" | "view" | null
   >(null);
   const [selectedStudent, setSelectedStudent] = useState<Student | null>(null);
   const [formData, setFormData] =
@@ -119,6 +113,7 @@ export default function StudentsPage() {
       setIsLoading(true);
       setError(null);
       const data = await apiClient("api/students");
+      console.log("data: ", data);
       setStudents(data);
     } catch (err: any) {
       setError(err.message || "Failed to fetch students.");
@@ -133,7 +128,7 @@ export default function StudentsPage() {
 
   // --- MANEJADORES DE DIÁLOGOS ---
   const handleOpen = (
-    type: "create" | "edit" | "status",
+    type: "create" | "edit" | "status" | "view",
     student?: Student
   ) => {
     setDialogError(null);
@@ -143,17 +138,17 @@ export default function StudentsPage() {
       setFormData(initialStudentState);
     } else if (student) {
       setSelectedStudent(student);
-      const editableData = {
-        ...student,
-        dob: formatDateForInput(student.dob),
-        enrollmentDate: formatDateForInput(student.enrollmentDate),
-        startDate: formatDateForInput(student.startDate),
-        notes: student.notes.map((note) => ({
-          ...note,
-          date: formatDateForInput(note.date),
-        })),
-      };
-      setFormData(editableData);
+      if (type === "edit") {
+        const editableData = {
+          ...student,
+          dob: formatDateForInput(student.dob),
+          notes: student.notes.map((note) => ({
+            ...note,
+            date: formatDateForInput(note.date),
+          })),
+        };
+        setFormData(editableData);
+      }
     }
     setOpenDialog(type);
   };
@@ -173,7 +168,7 @@ export default function StudentsPage() {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
-  const handleSelectChange = (name: keyof StudentFormData, value: string) => {
+  const handleSelectChange = (name: keyof StudentFormData, value: string | number) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
   const handleNoteChange = (
@@ -188,7 +183,7 @@ export default function StudentsPage() {
   const addNote = () => {
     const newNotes = [
       ...(formData.notes || []),
-      { date: new Date().toISOString().split("T")[0], text: "" },
+      { date: getCurrentDateString(), text: "" },
     ];
     setFormData((prev) => ({ ...prev, notes: newNotes }));
   };
@@ -226,15 +221,19 @@ export default function StudentsPage() {
     if (!selectedStudent) return;
     setIsSubmitting(true);
     setDialogError(null);
-    const action = selectedStudent.isActive ? "deactivate" : "activate";
-    const body: { reason?: string } = {};
-    if (action === "deactivate" && deactivationReason) {
+    
+    // Cambiar entre activo (1) e inactivo (0)
+    const newStatus = selectedStudent.status === 1 ? 0 : 1;
+    const body: { status: number; reason?: string } = { status: newStatus };
+    
+    if (newStatus === 0 && deactivationReason) {
       body.reason = deactivationReason;
     }
+    
     try {
-      await apiClient(`api/students/${selectedStudent._id}/${action}`, {
-        method: "PATCH",
-        body: Object.keys(body).length > 0 ? JSON.stringify(body) : undefined,
+      await apiClient(`api/students/${selectedStudent._id}`, {
+        method: "PUT",
+        body: JSON.stringify(body),
       });
       await fetchStudents();
       handleClose();
@@ -245,47 +244,132 @@ export default function StudentsPage() {
     }
   };
 
+  const stringLocaleSort =
+    (locale = "es") =>
+    (rowA: any, rowB: any, columnId: string) => {
+      const a = (rowA.getValue(columnId) ?? "").toString();
+      const b = (rowB.getValue(columnId) ?? "").toString();
+      return a.localeCompare(b, locale, {
+        numeric: true,
+        sensitivity: "base",
+        ignorePunctuation: true,
+      });
+    };
+
   // --- DEFINICIÓN DE COLUMNAS PARA LA TABLA ---
-  const columns = [
-    { accessorKey: "studentCode", header: "Code" },
-    { accessorKey: "name", header: "Name" },
-    { accessorKey: "email", header: "Email" },
-    { accessorKey: "phone", header: "Phone" },
-    { accessorKey: "status", header: "Course Status" },
-    {
-      accessorKey: "isActive",
-      header: "System Status",
-      cell: (item: Student) => (
-        <span
-          className={`px-2 py-1 rounded-full text-xs font-semibold ${
-            item.isActive
-              ? "bg-secondary/20 text-secondary"
-              : "bg-accent-1/20 text-accent-1"
-          }`}
+  const columns: ColumnDef<Student>[] = [
+    { 
+      accessorKey: "studentCode", 
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
         >
-          {item.isActive ? "Active" : "Inactive"}
-        </span>
+          Code
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
       ),
+      sortingFn: stringLocaleSort(),
+    },
+    { 
+      accessorKey: "name", 
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Name
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
+      sortingFn: stringLocaleSort(),
+    },
+    { 
+      accessorKey: "email", 
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Email
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
+      sortingFn: stringLocaleSort(),
+    },
+    { 
+      accessorKey: "phone", 
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Phone
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
+      sortingFn: stringLocaleSort(),
+    },
+    { 
+      accessorKey: "status", 
+      header: ({ column }) => (
+        <Button
+          variant="ghost"
+          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+          className="flex items-center gap-1"
+        >
+          Status
+          <ArrowUpDown className="h-4 w-4" />
+        </Button>
+      ),
+      sortingFn: stringLocaleSort(),
+      cell: ({ row }) => {
+        const status = row.original.status;
+        const statusText = status === 1 ? "Active" : status === 0 ? "Inactive" : "Paused";
+        const statusClass = status === 1 
+          ? "bg-secondary/20 text-secondary"
+          : status === 0 
+          ? "bg-accent-1/20 text-accent-1"
+          : "bg-yellow-100 text-yellow-800";
+        
+        return (
+          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusClass}`}>
+            {statusText}
+          </span>
+        );
+      },
     },
     {
-      accessorKey: "_id",
+      id: "actions",
       header: "Actions",
-      cell: (item: Student) => (
+      cell: ({ row }) => (
         <div className="flex gap-2">
           <Button
             size="icon"
             variant="outline"
+            className="text-secondary border-secondary/50 hover:bg-secondary/10"
+            onClick={() => handleOpen("view", row.original)}
+          >
+            <Eye className="h-4 w-4" />
+          </Button>
+          <Button
+            size="icon"
+            variant="outline"
             className="text-primary border-primary/50 hover:bg-primary/10"
-            onClick={() => handleOpen("edit", item)}
+            onClick={() => handleOpen("edit", row.original)}
           >
             <Pencil className="h-4 w-4" />
           </Button>
-          {item.isActive ? (
+          {row.original.status === 1 ? (
             <Button
               size="icon"
               variant="outline"
               className="text-accent-1 border-accent-1/50 hover:bg-accent-1/10"
-              onClick={() => handleOpen("status", item)}
+              onClick={() => handleOpen("status", row.original)}
             >
               <Ban className="h-4 w-4" />
             </Button>
@@ -294,7 +378,7 @@ export default function StudentsPage() {
               size="icon"
               variant="outline"
               className="text-secondary border-secondary/50 hover:bg-secondary/10"
-              onClick={() => handleOpen("status", item)}
+              onClick={() => handleOpen("status", row.original)}
             >
               <CheckCircle2 className="h-4 w-4" />
             </Button>
@@ -302,11 +386,11 @@ export default function StudentsPage() {
         </div>
       ),
     },
-  ] as const;
+  ];
 
   // --- RENDERIZADO DEL COMPONENTE ---
   return (
-    <div className="space-y-6  p-4 md:p-6 rounded-lg">
+    <div className="space-y-6">
       <PageHeader title="Students" subtitle="Manage all enrolled students">
         <Button
           className="bg-primary text-white hover:bg-primary/90"
@@ -326,7 +410,7 @@ export default function StudentsPage() {
 
       {!isLoading && !error && (
         <Card className=" border-none">
-          <CardContent className="pt-6">
+          <CardContent>
             <DataTable
               columns={columns}
               data={students}
@@ -347,6 +431,7 @@ export default function StudentsPage() {
             <DialogTitle>
               {openDialog === "create" && "Add New Student"}
               {openDialog === "edit" && "Edit Student's Information"}
+              {openDialog === "view" && "Student Details"}
               {openDialog === "status" && `Confirm Status Change`}
             </DialogTitle>
           </DialogHeader>
@@ -358,16 +443,7 @@ export default function StudentsPage() {
             >
               <fieldset className="border p-4 rounded-md">
                 <legend className="px-1 text-sm">Personal Info</legend>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-2">
-                  <div className="space-y-2">
-                    <Label>Student Code</Label>
-                    <Input
-                      name="studentCode"
-                      value={formData.studentCode || ""}
-                      onChange={handleFormChange}
-                      required
-                    />
-                  </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-2">
                   <div className="space-y-2">
                     <Label>Full Name</Label>
                     <Input
@@ -398,9 +474,9 @@ export default function StudentsPage() {
                         <SelectValue placeholder="Select..." />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="male">Male</SelectItem>
-                        <SelectItem value="female">Female</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
+                        <SelectItem value="Male">Male</SelectItem>
+                        <SelectItem value="Female">Female</SelectItem>
+                        <SelectItem value="Other">Other</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
@@ -420,6 +496,23 @@ export default function StudentsPage() {
                       onChange={handleFormChange}
                       required
                     />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Status</Label>
+                    <Select
+                      name="status"
+                      onValueChange={(v) => handleSelectChange("status", parseInt(v))}
+                      value={formData.status?.toString() || "1"}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select status..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="1">Active</SelectItem>
+                        <SelectItem value="0">Inactive</SelectItem>
+                        <SelectItem value="2">Paused</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               </fieldset>
@@ -469,49 +562,6 @@ export default function StudentsPage() {
                     <Input
                       name="country"
                       value={formData.country || ""}
-                      onChange={handleFormChange}
-                      required
-                    />
-                  </div>
-                </div>
-              </fieldset>
-              <fieldset className="border p-4 rounded-md">
-                <legend className="px-1 text-sm">Academic Info</legend>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
-                  <div className="space-y-2">
-                    <Label>Enrollment Date</Label>
-                    <Input
-                      name="enrollmentDate"
-                      type="date"
-                      value={formData.enrollmentDate || ""}
-                      onChange={handleFormChange}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Start Date</Label>
-                    <Input
-                      name="startDate"
-                      type="date"
-                      value={formData.startDate || ""}
-                      onChange={handleFormChange}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Language</Label>
-                    <Input
-                      name="language"
-                      value={formData.language || ""}
-                      onChange={handleFormChange}
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Status</Label>
-                    <Input
-                      name="status"
-                      value={formData.status || ""}
                       onChange={handleFormChange}
                       required
                     />
@@ -592,10 +642,10 @@ export default function StudentsPage() {
               <DialogDescription className="text-light-text dark:text-dark-text">
                 <p>
                   Are you sure you want to{" "}
-                  {selectedStudent.isActive ? "deactivate" : "activate"}{" "}
+                  {selectedStudent.status === 1 ? "deactivate" : "activate"}{" "}
                   <span className="font-bold">{selectedStudent.name}</span>?
                 </p>
-                {selectedStudent.isActive && (
+                {selectedStudent.status === 1 && (
                   <div className="mt-4 space-y-2">
                     <Label htmlFor="reason">
                       Reason for deactivation (optional)
@@ -619,9 +669,9 @@ export default function StudentsPage() {
                   Cancel
                 </Button>
                 <Button
-                  variant={selectedStudent.isActive ? "destructive" : "default"}
+                  variant={selectedStudent.status === 1 ? "destructive" : "default"}
                   className={
-                    !selectedStudent.isActive
+                    selectedStudent.status !== 1
                       ? "bg-secondary hover:bg-secondary/90 text-white"
                       : ""
                   }
@@ -631,7 +681,102 @@ export default function StudentsPage() {
                   {isSubmitting && (
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   )}{" "}
-                  {selectedStudent.isActive ? "Deactivate" : "Activate"}
+                  {selectedStudent.status === 1 ? "Deactivate" : "Activate"}
+                </Button>
+              </DialogFooter>
+            </div>
+          )}
+
+          {openDialog === "view" && selectedStudent && (
+            <div className="space-y-6 max-h-[70vh] overflow-y-auto p-1 pr-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
+                <div>
+                  <Label className="font-semibold">Student Code</Label>
+                  <p className="text-sm font-semibold">{selectedStudent.studentCode}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Full Name</Label>
+                  <p className="text-sm font-semibold">{selectedStudent.name}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Date of Birth</Label>
+                  <p className="text-sm">
+                    {selectedStudent.dob ? formatDateForDisplay(selectedStudent.dob) : "N/A"}
+                  </p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Gender</Label>
+                  <p className="text-sm">{selectedStudent.gender || "N/A"}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Representative</Label>
+                  <p className="text-sm">{selectedStudent.representativeName || "N/A"}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Occupation</Label>
+                  <p className="text-sm">{selectedStudent.occupation || "N/A"}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Email</Label>
+                  <p className="text-sm">{selectedStudent.email}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Phone</Label>
+                  <p className="text-sm">{selectedStudent.phone}</p>
+                </div>
+                <div className="md:col-span-2">
+                  <Label className="font-semibold">Address</Label>
+                  <p className="text-sm">{selectedStudent.address}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">City</Label>
+                  <p className="text-sm">{selectedStudent.city}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Country</Label>
+                  <p className="text-sm">{selectedStudent.country}</p>
+                </div>
+                <div>
+                  <Label className="font-semibold">Status</Label>
+                  <span
+                    className={`px-2 py-1 rounded-full text-xs font-semibold ${
+                      selectedStudent.status === 1
+                        ? "bg-secondary/20 text-secondary"
+                        : selectedStudent.status === 0
+                        ? "bg-accent-1/20 text-accent-1"
+                        : "bg-yellow-100 text-yellow-800"
+                    }`}
+                  >
+                    {selectedStudent.status === 1 ? "Active" : selectedStudent.status === 0 ? "Inactive" : "Paused"}
+                  </span>
+                </div>
+              </div>
+              
+              {selectedStudent.notes && selectedStudent.notes.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-medium">Notes</h3>
+                  {selectedStudent.notes.map((note, index) => (
+                    <div key={note._id || index} className="border p-4 rounded-md">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <Label className="text-sm text-muted-foreground">Date</Label>
+                          <p className="text-sm font-semibold">
+                            {note.date ? formatDateForDisplay(note.date) : "N/A"}
+                          </p>
+                        </div>
+                        <div className="md:col-span-2">
+                          <Label className="text-sm text-muted-foreground">Note</Label>
+                          <p className="text-sm">{note.text}</p>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              <DialogFooter className="pt-4 border-t">
+                <Button variant="outline" onClick={handleClose}>
+                  Close
                 </Button>
               </DialogFooter>
             </div>

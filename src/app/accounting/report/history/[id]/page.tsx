@@ -600,7 +600,7 @@ export default function ViewReportPage() {
           <CardHeader>
             <CardTitle>Final Summary</CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4 pt-6">
+          <CardContent className="space-y-4">
             <div className="flex justify-between items-center">
               <Label>System Total:</Label>
               <span className="font-bold">

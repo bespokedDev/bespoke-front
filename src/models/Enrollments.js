@@ -25,19 +25,33 @@ db.createCollection("enrollments", {
         enrollmentType: {
           enum: ["single","couple","group"]
         },
+        // 👇 NUEVO CAMPO
+        alias: {
+          bsonType: "string",
+          description: "Alias del enrollment (solo para couple o group)",
+          maxLength: 100
+        },
         scheduledDays: {
           bsonType: "array",
           minItems: 1,
-          description: "Días de la semana (p.ej. ['Monday','Wednesday'])",
+          description: "Días de la semana programados",
           items: {
-            enum: ["Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday"]
+            bsonType: "object",
+            required: ["day"],
+            properties: {
+              day: {
+                enum: ["Lunes","Martes","Miércoles","Jueves","Viernes","Sábado","Domingo"]
+              }
+            }
           }
         },
         purchaseDate: { bsonType: "date" },
+        startDate: { bsonType: "date" },
         pricePerStudent: { bsonType: "double" },
         totalAmount: { bsonType: "double" },
         status: {
-          enum: ["active","cancelled"]
+          enum: [1, 0, 2],
+          description: "1=activo, 0=inactivo, 2=pausado"
         },
         createdAt: { bsonType: "date" }
       }
