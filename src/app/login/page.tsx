@@ -53,17 +53,17 @@ export default function LoginPage() {
         <CardHeader>
           <CardTitle className="text-2xl text-lightText dark:text-darkText">Login</CardTitle>
           <CardDescription className="text-lightSubtext dark:text-darkSubtext">
-            Enter your email below to login to your account.
+            Enter your username below to login to your account.
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="email" className="text-lightText dark:text-darkText">Email</Label>
+              <Label htmlFor="email" className="text-lightText dark:text-darkText">User</Label>
               <Input
                 id="email"
-                type="email"
-                placeholder="m@example.com"
+                type="text"
+                placeholder="username"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
