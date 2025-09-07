@@ -5,14 +5,27 @@ import { useState, useEffect } from "react";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { DataTable } from "@/components/ui/data-table";
-import { Plus, Pencil, Ban, Eye, ArrowUpDown, Loader2, Check } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Ban,
+  Eye,
+  ArrowUpDown,
+  Loader2,
+  Check,
+} from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { apiClient } from "@/lib/api";
-import { formatDateForDisplay } from "@/lib/dateUtils";
 
 interface Plan {
   _id: string;
@@ -41,19 +54,15 @@ interface CreatePlanData {
   isActive: boolean;
 }
 
-interface UpdatePlanData extends CreatePlanData {}
-
-interface DeactivatePlanData {
-  reason: string;
-}
-
 export default function PlansPage() {
   const [plans, setPlans] = useState<Plan[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  const [openDialog, setOpenDialog] = useState<"create" | "edit" | "deactivate" | "view" | null>(null);
+  const [openDialog, setOpenDialog] = useState<
+    "create" | "edit" | "deactivate" | "view" | null
+  >(null);
   const [selectedPlan, setSelectedPlan] = useState<Plan | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<Record<string, string>>({});
@@ -82,7 +91,7 @@ export default function PlansPage() {
         method: "POST",
         body: JSON.stringify(planData),
       });
-      setPlans(prev => [...prev, response.plan]);
+      setPlans((prev) => [...prev, response.plan]);
       setSuccessMessage("Plan created successfully");
       handleClose();
     } catch (err: any) {
@@ -99,7 +108,7 @@ export default function PlansPage() {
   };
 
   // Update existing plan
-  const updatePlan = async (planId: string, planData: UpdatePlanData) => {
+  const updatePlan = async (planId: string, planData: CreatePlanData) => {
     try {
       setIsSubmitting(true);
       setFormErrors({});
@@ -107,9 +116,9 @@ export default function PlansPage() {
         method: "PUT",
         body: JSON.stringify(planData),
       });
-      setPlans(prev => prev.map(plan => 
-        plan._id === planId ? response.plan : plan
-      ));
+      setPlans((prev) =>
+        prev.map((plan) => (plan._id === planId ? response.plan : plan))
+      );
       setSuccessMessage("Plan updated successfully");
       handleClose();
     } catch (err: any) {
@@ -136,9 +145,13 @@ export default function PlansPage() {
         method: "PATCH",
         body: JSON.stringify({ reason }),
       });
-      setPlans(prev => prev.map(plan => 
-        plan._id === planId ? { ...plan, isActive: false, updatedAt: response.plan.updatedAt } : plan
-      ));
+      setPlans((prev) =>
+        prev.map((plan) =>
+          plan._id === planId
+            ? { ...plan, isActive: false, updatedAt: response.plan.updatedAt }
+            : plan
+        )
+      );
       setSuccessMessage("Plan deactivated successfully");
       handleClose();
     } catch (err: any) {
@@ -162,9 +175,13 @@ export default function PlansPage() {
       const response = await apiClient(`api/plans/${planId}/activate`, {
         method: "PATCH",
       });
-      setPlans(prev => prev.map(plan => 
-        plan._id === planId ? { ...plan, isActive: true, updatedAt: response.plan.updatedAt } : plan
-      ));
+      setPlans((prev) =>
+        prev.map((plan) =>
+          plan._id === planId
+            ? { ...plan, isActive: true, updatedAt: response.plan.updatedAt }
+            : plan
+        )
+      );
     } catch (err: any) {
       if (err.message.includes("400")) {
         setError("Plan is already active or invalid ID");
@@ -182,7 +199,10 @@ export default function PlansPage() {
     fetchPlans();
   }, []);
 
-  const handleOpen = (type: "create" | "edit" | "deactivate" | "view", plan?: Plan) => {
+  const handleOpen = (
+    type: "create" | "edit" | "deactivate" | "view",
+    plan?: Plan
+  ) => {
     setSelectedPlan(plan || null);
     setOpenDialog(type);
   };
@@ -198,34 +218,34 @@ export default function PlansPage() {
   // Form validation
   const validateForm = (formData: any): Record<string, string> => {
     const errors: Record<string, string> = {};
-    
+
     if (!formData.name?.trim()) {
       errors.name = "Name is required";
     }
-    
+
     if (formData.weeklyClasses === undefined || formData.weeklyClasses < 0) {
       errors.weeklyClasses = "Weekly classes must be 0 or greater";
     }
-    
+
     if (!formData.pricing?.single || formData.pricing.single < 0) {
       errors.singlePrice = "Single price must be 0 or greater";
     }
-    
+
     if (!formData.pricing?.couple || formData.pricing.couple < 0) {
       errors.couplePrice = "Couple price must be 0 or greater";
     }
-    
+
     if (!formData.pricing?.group || formData.pricing.group < 0) {
       errors.groupPrice = "Group price must be 0 or greater";
     }
-    
+
     return errors;
   };
 
   // Handle form submission
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const formData = new FormData(e.target as HTMLFormElement);
     const planData = {
       name: formData.get("name") as string,
@@ -236,7 +256,8 @@ export default function PlansPage() {
         couple: Number(formData.get("couplePrice")),
         group: Number(formData.get("groupPrice")),
       },
-      isActive: openDialog === "create" ? true : formData.get("isActive") === "true",
+      isActive:
+        openDialog === "create" ? true : formData.get("isActive") === "true",
     };
 
     const errors = validateForm(planData);
@@ -255,10 +276,10 @@ export default function PlansPage() {
   // Handle deactivate with reason
   const handleDeactivate = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     const formData = new FormData(e.target as HTMLFormElement);
     const reason = formData.get("reason") as string;
-    
+
     if (!reason?.trim()) {
       setFormErrors({ reason: "Reason is required" });
       return;
@@ -282,8 +303,8 @@ export default function PlansPage() {
     };
 
   const columns: ColumnDef<Plan>[] = [
-    { 
-      accessorKey: "name", 
+    {
+      accessorKey: "name",
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -296,8 +317,8 @@ export default function PlansPage() {
       ),
       sortingFn: stringLocaleSort(),
     },
-    { 
-      accessorKey: "weeklyClasses", 
+    {
+      accessorKey: "weeklyClasses",
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -310,11 +331,13 @@ export default function PlansPage() {
       ),
       sortingFn: stringLocaleSort(),
       cell: ({ row }) => (
-        <span className="font-medium">{row.original.weeklyClasses} classes/week</span>
+        <span className="font-medium">
+          {row.original.weeklyClasses} classes/week
+        </span>
       ),
     },
-    { 
-      accessorKey: "pricing", 
+    {
+      accessorKey: "pricing",
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -464,97 +487,105 @@ export default function PlansPage() {
                   {formErrors.general}
                 </div>
               )}
-              
+
               <div className="space-y-2">
                 <Label htmlFor="name">Name *</Label>
-                <Input 
-                  id="name" 
+                <Input
+                  id="name"
                   name="name"
-                  defaultValue={selectedPlan?.name || ""} 
+                  defaultValue={selectedPlan?.name || ""}
                   className={formErrors.name ? "border-red-500" : ""}
                 />
                 {formErrors.name && (
                   <p className="text-red-500 text-sm">{formErrors.name}</p>
                 )}
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="weeklyClasses">Weekly Classes *</Label>
-                <Input 
-                  id="weeklyClasses" 
+                <Input
+                  id="weeklyClasses"
                   name="weeklyClasses"
-                  type="number" 
+                  type="number"
                   min="0"
-                  defaultValue={selectedPlan?.weeklyClasses || ""} 
+                  defaultValue={selectedPlan?.weeklyClasses || ""}
                   className={formErrors.weeklyClasses ? "border-red-500" : ""}
                 />
                 {formErrors.weeklyClasses && (
-                  <p className="text-red-500 text-sm">{formErrors.weeklyClasses}</p>
+                  <p className="text-red-500 text-sm">
+                    {formErrors.weeklyClasses}
+                  </p>
                 )}
               </div>
-              
+
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
-                <Input 
-                  id="description" 
+                <Input
+                  id="description"
                   name="description"
-                  defaultValue={selectedPlan?.description || ""} 
+                  defaultValue={selectedPlan?.description || ""}
                 />
               </div>
-              
+
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="singlePrice">Single Price *</Label>
-                  <Input 
-                    id="singlePrice" 
+                  <Input
+                    id="singlePrice"
                     name="singlePrice"
-                    type="number" 
+                    type="number"
                     min="0"
                     step="0.01"
-                    defaultValue={selectedPlan?.pricing.single || ""} 
+                    defaultValue={selectedPlan?.pricing.single || ""}
                     className={formErrors.singlePrice ? "border-red-500" : ""}
                   />
                   {formErrors.singlePrice && (
-                    <p className="text-red-500 text-sm">{formErrors.singlePrice}</p>
+                    <p className="text-red-500 text-sm">
+                      {formErrors.singlePrice}
+                    </p>
                   )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="couplePrice">Couple Price *</Label>
-                  <Input 
-                    id="couplePrice" 
+                  <Input
+                    id="couplePrice"
                     name="couplePrice"
-                    type="number" 
+                    type="number"
                     min="0"
                     step="0.01"
-                    defaultValue={selectedPlan?.pricing.couple || ""} 
+                    defaultValue={selectedPlan?.pricing.couple || ""}
                     className={formErrors.couplePrice ? "border-red-500" : ""}
                   />
                   {formErrors.couplePrice && (
-                    <p className="text-red-500 text-sm">{formErrors.couplePrice}</p>
+                    <p className="text-red-500 text-sm">
+                      {formErrors.couplePrice}
+                    </p>
                   )}
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="groupPrice">Group Price *</Label>
-                  <Input 
-                    id="groupPrice" 
+                  <Input
+                    id="groupPrice"
                     name="groupPrice"
-                    type="number" 
+                    type="number"
                     min="0"
                     step="0.01"
-                    defaultValue={selectedPlan?.pricing.group || ""} 
+                    defaultValue={selectedPlan?.pricing.group || ""}
                     className={formErrors.groupPrice ? "border-red-500" : ""}
                   />
                   {formErrors.groupPrice && (
-                    <p className="text-red-500 text-sm">{formErrors.groupPrice}</p>
+                    <p className="text-red-500 text-sm">
+                      {formErrors.groupPrice}
+                    </p>
                   )}
                 </div>
               </div>
-              
+
               {openDialog === "edit" && (
                 <div className="space-y-2">
                   <Label htmlFor="isActive">Status</Label>
-                  <select 
-                    id="isActive" 
+                  <select
+                    id="isActive"
                     name="isActive"
                     defaultValue={selectedPlan?.isActive ? "true" : "false"}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary"
@@ -575,8 +606,12 @@ export default function PlansPage() {
                   <p className="text-sm font-semibold">{selectedPlan.name}</p>
                 </div>
                 <div>
-                  <Label className="text-sm font-semibold">Weekly Classes</Label>
-                  <p className="text-sm">{selectedPlan.weeklyClasses} classes per week</p>
+                  <Label className="text-sm font-semibold">
+                    Weekly Classes
+                  </Label>
+                  <p className="text-sm">
+                    {selectedPlan.weeklyClasses} classes per week
+                  </p>
                 </div>
                 <div>
                   <Label className="text-sm font-semibold">Description</Label>
@@ -609,12 +644,13 @@ export default function PlansPage() {
           {openDialog === "deactivate" && (
             <form onSubmit={handleDeactivate} className="space-y-4">
               <p className="text-sm text-muted-foreground">
-                Are you sure you want to deactivate <strong>{selectedPlan?.name}</strong>?
+                Are you sure you want to deactivate{" "}
+                <strong>{selectedPlan?.name}</strong>?
               </p>
               <div className="space-y-2">
                 <Label htmlFor="reason">Reason for deactivation *</Label>
-                <Input 
-                  id="reason" 
+                <Input
+                  id="reason"
                   name="reason"
                   placeholder="Enter reason for deactivation..."
                   className={formErrors.reason ? "border-red-500" : ""}
@@ -627,24 +663,32 @@ export default function PlansPage() {
           )}
 
           <DialogFooter className="mt-4">
-            <Button variant="outline" onClick={handleClose} disabled={isSubmitting}>
+            <Button
+              variant="outline"
+              onClick={handleClose}
+              disabled={isSubmitting}
+            >
               {openDialog === "view" ? "Close" : "Cancel"}
             </Button>
             {openDialog !== "view" && (
-              <Button 
-                variant={openDialog === "deactivate" ? "destructive" : "default"}
+              <Button
+                variant={
+                  openDialog === "deactivate" ? "destructive" : "default"
+                }
                 disabled={isSubmitting}
                 onClick={() => {
                   if (openDialog === "create" || openDialog === "edit") {
-                    const form = document.querySelector('form');
+                    const form = document.querySelector("form");
                     if (form) form.requestSubmit();
                   } else if (openDialog === "deactivate") {
-                    const form = document.querySelector('form');
+                    const form = document.querySelector("form");
                     if (form) form.requestSubmit();
                   }
                 }}
               >
-                {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                {isSubmitting && (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                )}
                 {openDialog === "create" && "Create"}
                 {openDialog === "edit" && "Save changes"}
                 {openDialog === "deactivate" && "Deactivate"}

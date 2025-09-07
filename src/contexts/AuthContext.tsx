@@ -1,7 +1,13 @@
-'use client';
+"use client";
 
-import React, { createContext, useState, useContext, useEffect, ReactNode } from 'react';
-import { useRouter } from 'next/navigation';
+import React, {
+  createContext,
+  useState,
+  useContext,
+  useEffect,
+  ReactNode,
+} from "react";
+import { useRouter } from "next/navigation";
 
 // Definimos los tipos para el usuario y el contexto
 interface User {
@@ -33,8 +39,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     // Al cargar la app, intentamos recuperar el token y los datos del usuario del localStorage
     try {
-      const storedToken = localStorage.getItem('authToken');
-      const storedUser = localStorage.getItem('user');
+      const storedToken = localStorage.getItem("authToken");
+      const storedUser = localStorage.getItem("user");
       if (storedToken && storedUser) {
         setToken(storedToken);
         setUser(JSON.parse(storedUser));
@@ -42,8 +48,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } catch (error) {
       console.error("Failed to parse auth data from localStorage", error);
       // Si hay un error, limpiamos el storage
-      localStorage.removeItem('authToken');
-      localStorage.removeItem('user');
+      localStorage.removeItem("authToken");
+      localStorage.removeItem("user");
     } finally {
       setIsLoading(false);
     }
@@ -53,26 +59,36 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     // Guardamos el token y los datos del usuario en el estado y en localStorage
     setToken(newToken);
     setUser(userData);
-    localStorage.setItem('authToken', newToken);
-    localStorage.setItem('user', JSON.stringify(userData));
+    localStorage.setItem("authToken", newToken);
+    localStorage.setItem("user", JSON.stringify(userData));
     // Guardamos el token en las cookies para que el middleware pueda acceder a él
     document.cookie = `authToken=${newToken}; path=/; max-age=86400; SameSite=Strict;`; // max-age=1 day
-    router.push('/'); // Redirigimos al dashboard o a la página principal
+    router.push("/"); // Redirigimos al dashboard o a la página principal
   };
 
   const logout = () => {
     // Limpiamos el estado y el localStorage
     setToken(null);
     setUser(null);
-    localStorage.removeItem('authToken');
-    localStorage.removeItem('user');
+    localStorage.removeItem("authToken");
+    localStorage.removeItem("user");
     // Eliminamos la cookie
-    document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
-    router.push('/login'); // Redirigimos a la página de login
+    document.cookie =
+      "authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
+    router.push("/login"); // Redirigimos a la página de login
   };
 
   return (
-    <AuthContext.Provider value={{ isAuthenticated: !!token, user, token, login, logout, isLoading }}>
+    <AuthContext.Provider
+      value={{
+        isAuthenticated: !!token,
+        user,
+        token,
+        login,
+        logout,
+        isLoading,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );
@@ -82,7 +98,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
+    throw new Error("useAuth must be used within an AuthProvider");
   }
   return context;
 };

@@ -1,4 +1,6 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */ "use client";import { useState, useEffect, useMemo, Suspense } from "react";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
+import { useState, useEffect, useMemo, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { apiClient } from "@/lib/api";
 import { PageHeader } from "@/components/ui/page-header";
@@ -22,13 +24,6 @@ import {
   TableFooter,
 } from "@/components/ui/table";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Command,
   CommandEmpty,
   CommandGroup,
@@ -41,7 +36,14 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-import { Loader2, FileDown, PlusCircle, Trash2, ArrowLeft, UserPlus } from "lucide-react";
+import {
+  Loader2,
+  FileDown,
+  PlusCircle,
+  Trash2,
+  ArrowLeft,
+  UserPlus,
+} from "lucide-react";
 import { format } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -65,7 +67,7 @@ interface ReportDetail {
   totalBespoke: number;
   balanceRemaining: number;
   status: 1 | 2;
-  type: 'normal' | 'substitute' | 'bonus';
+  type: "normal" | "substitute" | "bonus";
   bonusReason?: string;
 }
 
@@ -101,7 +103,7 @@ interface SpecialReportDetail {
   payment: number | null;
   total: number;
   balanceRemaining: number;
-  type: 'normal' | 'substitute' | 'bonus';
+  type: "normal" | "substitute" | "bonus";
   bonusReason?: string;
 }
 
@@ -157,7 +159,7 @@ interface EnrollmentForSelect {
   _id: string;
   studentIds: { name: string; alias?: string }[];
   planId: { name: string };
-  enrollmentType: 'single' | 'couple' | 'group';
+  enrollmentType: "single" | "couple" | "group";
   initialBalance?: number;
 }
 
@@ -183,15 +185,19 @@ function NewReportComponent() {
   const month = searchParams.get("month");
 
   const [reportData, setReportData] = useState<ReportState | null>(null);
-  const [excedents, setExcedents] = useState<ExcedentRow[]>([]);
+  const [excedents] = useState<ExcedentRow[]>([]);
   const [realTotal, setRealTotal] = useState<number>(0);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [isPrinting, setIsPrinting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [enrollments, setEnrollments] = useState<EnrollmentForSelect[]>([]);
-  const [enrollmentBalances, setEnrollmentBalances] = useState<EnrollmentBalance[]>([]);
-  const [openSelectors, setOpenSelectors] = useState<{[key: string]: boolean}>({});
+  const [enrollmentBalances, setEnrollmentBalances] = useState<
+    EnrollmentBalance[]
+  >([]);
+  const [openSelectors, setOpenSelectors] = useState<{
+    [key: string]: boolean;
+  }>({});
 
   const handleGenerateReport = async (reportMonth: string) => {
     setIsLoading(true);
@@ -208,10 +214,10 @@ function NewReportComponent() {
         ...prof,
         details: prof.details.map((detail: any) => ({
           ...detail,
-          amountInDollars: detail.amountInDollars || (detail.amount || 0),
+          amountInDollars: detail.amountInDollars || detail.amount || 0,
           hoursSeen: null, // Inicializar como null en lugar de 0
-          balance: null,   // Inicializar como null en lugar de 0
-          type: 'normal',  // Tipo por defecto para registros existentes
+          balance: null, // Inicializar como null en lugar de 0
+          type: "normal", // Tipo por defecto para registros existentes
         })),
         subtotals: { totalTeacher: 0, totalBespoke: 0, balanceRemaining: 0 },
       }));
@@ -219,14 +225,16 @@ function NewReportComponent() {
       const initialSpecialReport = response.specialProfessorReport
         ? {
             ...response.specialProfessorReport,
-            details: response.specialProfessorReport.details.map((detail: any) => ({
-              ...detail,
-              amountInDollars: detail.amountInDollars || (detail.amount || 0),
-              hoursSeen: null,    // Inicializar como null
-              oldBalance: null,   // Inicializar como null
-              payment: null,      // Inicializar como null
-              type: 'normal',     // Tipo por defecto para registros existentes
-            })),
+            details: response.specialProfessorReport.details.map(
+              (detail: any) => ({
+                ...detail,
+                amountInDollars: detail.amountInDollars || detail.amount || 0,
+                hoursSeen: null, // Inicializar como null
+                oldBalance: null, // Inicializar como null
+                payment: null, // Inicializar como null
+                type: "normal", // Tipo por defecto para registros existentes
+              })
+            ),
             subtotal: { total: 0, balanceRemaining: 0 },
           }
         : null;
@@ -249,191 +257,137 @@ function NewReportComponent() {
   };
 
   // Función helper para obtener el indicador visual del tipo
-  const getTypeIndicator = (type: 'normal' | 'substitute' | 'bonus') => {
+  const getTypeIndicator = (type: "normal" | "substitute" | "bonus") => {
     switch (type) {
-      case 'normal': return '📚'; // Clase normal
-      case 'substitute': return '🔄'; // Suplencia
-      case 'bonus': return '💰'; // Bono manual
-      default: return '';
+      case "normal":
+        return "📚"; // Clase normal
+      case "substitute":
+        return "🔄"; // Suplencia
+      case "bonus":
+        return "💰"; // Bono manual
+      default:
+        return "";
     }
-  };
-
-  // Función helper para obtener el balance disponible de un enrollment
-  const getEnrollmentBalance = (enrollmentId: string | null) => {
-    if (!enrollmentId) return 0;
-    const balance = enrollmentBalances.find(b => b.enrollmentId === enrollmentId);
-    return balance?.remaining || 0;
   };
 
   // Función helper para formatear el nombre del enrollment
   const formatEnrollmentName = (enrollment: EnrollmentForSelect) => {
-    const studentName = enrollment.studentIds[0]?.alias || enrollment.studentIds[0]?.name || '';
+    const studentName =
+      enrollment.studentIds[0]?.alias || enrollment.studentIds[0]?.name || "";
     const planName = enrollment.planId.name;
-    const typePrefix = enrollment.enrollmentType === 'single' ? 'S' : 
-                      enrollment.enrollmentType === 'couple' ? 'C' : 'G';
+    const typePrefix =
+      enrollment.enrollmentType === "single"
+        ? "S"
+        : enrollment.enrollmentType === "couple"
+        ? "C"
+        : "G";
     return `(${typePrefix} - ${planName}) ${studentName}`;
   };
 
-  // Función helper para obtener el balance remaining correcto de un enrollment
-  const getCorrectBalanceRemaining = (enrollmentId: string | null, currentAmount: number) => {
-    if (!enrollmentId || !calculatedData) return 0;
-    const enrollment = enrollments.find(e => e._id === enrollmentId);
-    if (!enrollment) return 0;
-    
-    // Buscar el enrollment en los datos CALCULADOS para obtener el balance remaining ACTUAL
-    let currentBalanceRemaining = 0;
-    
-    // Buscar en reportes generales calculados
-    if (calculatedData.generalReport) {
-      calculatedData.generalReport.forEach(prof => {
-        prof.details.forEach(detail => {
-          if (detail.enrollmentId === enrollmentId && detail.type === 'normal') {
-            // Usar el balance remaining calculado dinámicamente
-            currentBalanceRemaining = detail.balanceRemaining || 0;
-          }
-        });
-      });
-    }
-    
-    // Buscar en reporte especial calculado
-    if (calculatedData.specialReport) {
-      calculatedData.specialReport.details.forEach(detail => {
-        if (detail.enrollmentId === enrollmentId && detail.type === 'normal') {
-          // Usar el balance remaining calculado dinámicamente
-          currentBalanceRemaining = detail.balanceRemaining || 0;
-        }
-      });
-    }
-    
-    // Si no se encuentra en los datos calculados, usar el balance inicial del enrollment
-    if (currentBalanceRemaining === 0) {
-      currentBalanceRemaining = enrollment.initialBalance || 0;
-    }
-    
-    return currentBalanceRemaining;
-  };
-
-  // Función helper para obtener el balance disponible considerando todas las suplencias previas
-  const getAvailableBalanceForSubstitute = (enrollmentId: string | null, excludeCurrentSubstitute?: {profIndex: number, detailIndex: number}) => {
-    if (!enrollmentId || !calculatedData) return 0;
-    const enrollment = enrollments.find(e => e._id === enrollmentId);
-    if (!enrollment) return 0;
-    
-    // Obtener el balance remaining de la clase normal
-    let baseBalance = getCorrectBalanceRemaining(enrollmentId, 0);
-    
-    // Restar todas las suplencias previas del mismo enrollment
-    if (calculatedData.generalReport) {
-      calculatedData.generalReport.forEach((prof, profIndex) => {
-        prof.details.forEach((detail, detailIndex) => {
-          if (detail.enrollmentId === enrollmentId && 
-              detail.type === 'substitute' && 
-              !(excludeCurrentSubstitute && excludeCurrentSubstitute.profIndex === profIndex && excludeCurrentSubstitute.detailIndex === detailIndex)) {
-            // Restar el total de la suplencia (hoursSeen * pricePerHour)
-            const substituteTotal = (detail.hoursSeen || 0) * (detail.pricePerHour || 0);
-            baseBalance -= substituteTotal;
-          }
-        });
-      });
-    }
-    
-    if (calculatedData.specialReport) {
-      calculatedData.specialReport.details.forEach((detail, detailIndex) => {
-        if (detail.enrollmentId === enrollmentId && 
-            detail.type === 'substitute' && 
-            !(excludeCurrentSubstitute && excludeCurrentSubstitute.profIndex === -1 && excludeCurrentSubstitute.detailIndex === detailIndex)) {
-          // Restar el total de la suplencia (payment)
-          const substituteTotal = detail.payment || 0;
-          baseBalance -= substituteTotal;
-        }
-      });
-    }
-    
-    return Math.max(0, baseBalance); // No permitir balance negativo
-  };
-
   // Función helper para obtener el balance disponible considerando suplencias previas (versión mejorada)
-  const getAvailableBalanceForSubstituteV2 = (enrollmentId: string | null, excludeCurrentSubstitute?: {profIndex: number, detailIndex: number}) => {
+  const getAvailableBalanceForSubstituteV2 = (
+    enrollmentId: string | null,
+    excludeCurrentSubstitute?: { profIndex: number; detailIndex: number }
+  ) => {
     if (!enrollmentId || !reportData) return 0;
-    const enrollment = enrollments.find(e => e._id === enrollmentId);
+    const enrollment = enrollments.find((e) => e._id === enrollmentId);
     if (!enrollment) return 0;
-    
+
     // Obtener el balance remaining de la clase normal desde los datos originales
     let baseBalance = 0;
-    
+
     // Buscar en reportes generales
     if (reportData.general) {
-      reportData.general.forEach(prof => {
-        prof.details.forEach(detail => {
-          if (detail.enrollmentId === enrollmentId && detail.type === 'normal') {
+      reportData.general.forEach((prof) => {
+        prof.details.forEach((detail) => {
+          if (
+            detail.enrollmentId === enrollmentId &&
+            detail.type === "normal"
+          ) {
             // Calcular el balance remaining basado en las horas vistas
-            const totalHours = detail.totalHours || 0;
             const hoursSeen = detail.hoursSeen || 0;
             const pricePerHour = detail.pricePerHour || 0;
             const amountInDollars = detail.amountInDollars || 0;
             const balance = detail.balance || 0;
-            
+
             // Balance remaining = amount + balance - (hoursSeen * pricePerHour)
-            baseBalance = amountInDollars + balance - (hoursSeen * pricePerHour);
+            baseBalance = amountInDollars + balance - hoursSeen * pricePerHour;
           }
         });
       });
     }
-    
+
     // Buscar en reporte especial
     if (reportData.special) {
-      reportData.special.details.forEach(detail => {
-        if (detail.enrollmentId === enrollmentId && detail.type === 'normal') {
+      reportData.special.details.forEach((detail) => {
+        if (detail.enrollmentId === enrollmentId && detail.type === "normal") {
           const amountInDollars = detail.amountInDollars || 0;
           const payment = detail.payment || 0;
           baseBalance = amountInDollars - payment;
         }
       });
     }
-    
+
     // Si no se encuentra, usar el balance inicial del enrollment
     if (baseBalance === 0) {
       baseBalance = enrollment.initialBalance || 0;
     }
-    
+
     // Restar todas las suplencias previas del mismo enrollment
     if (reportData.general) {
       reportData.general.forEach((prof, profIndex) => {
         prof.details.forEach((detail, detailIndex) => {
-          if (detail.enrollmentId === enrollmentId && 
-              detail.type === 'substitute' && 
-              !(excludeCurrentSubstitute && excludeCurrentSubstitute.profIndex === profIndex && excludeCurrentSubstitute.detailIndex === detailIndex)) {
+          if (
+            detail.enrollmentId === enrollmentId &&
+            detail.type === "substitute" &&
+            !(
+              excludeCurrentSubstitute &&
+              excludeCurrentSubstitute.profIndex === profIndex &&
+              excludeCurrentSubstitute.detailIndex === detailIndex
+            )
+          ) {
             // Restar el total de la suplencia (hoursSeen * pricePerHour)
-            const substituteTotal = (detail.hoursSeen || 0) * (detail.pricePerHour || 0);
+            const substituteTotal =
+              (detail.hoursSeen || 0) * (detail.pricePerHour || 0);
             baseBalance -= substituteTotal;
           }
         });
       });
     }
-    
+
     if (reportData.special) {
       reportData.special.details.forEach((detail, detailIndex) => {
-        if (detail.enrollmentId === enrollmentId && 
-            detail.type === 'substitute' && 
-            !(excludeCurrentSubstitute && excludeCurrentSubstitute.profIndex === -1 && excludeCurrentSubstitute.detailIndex === detailIndex)) {
+        if (
+          detail.enrollmentId === enrollmentId &&
+          detail.type === "substitute" &&
+          !(
+            excludeCurrentSubstitute &&
+            excludeCurrentSubstitute.profIndex === -1 &&
+            excludeCurrentSubstitute.detailIndex === detailIndex
+          )
+        ) {
           // Restar el total de la suplencia (payment)
           const substituteTotal = detail.payment || 0;
           baseBalance -= substituteTotal;
         }
       });
     }
-    
+
     return Math.max(0, baseBalance); // No permitir balance negativo
   };
 
   // Función helper para obtener el pPerHour del profesor actual basado en el tipo de enrollment
-  const getCurrentProfessorPayPerHour = (profIndex: number, enrollmentId: string | null, isSpecial: boolean = false) => {
+  const getCurrentProfessorPayPerHour = (
+    profIndex: number,
+    enrollmentId: string | null,
+    isSpecial: boolean = false
+  ) => {
     if (!enrollmentId) return 0;
-    
+
     // Obtener el enrollment para saber su tipo
-    const enrollment = enrollments.find(e => e._id === enrollmentId);
+    const enrollment = enrollments.find((e) => e._id === enrollmentId);
     if (!enrollment) return 0;
-    
+
     if (isSpecial) {
       // Para el profesor especial, usar los rates del reporte especial
       if (reportData?.special?.rates) {
@@ -442,135 +396,145 @@ function NewReportComponent() {
     } else {
       // Para profesores generales, usar los rates del profesor específico
       if (reportData?.general && reportData.general[profIndex]?.rates) {
-        return reportData.general[profIndex].rates[enrollment.enrollmentType] || 0;
+        return (
+          reportData.general[profIndex].rates[enrollment.enrollmentType] || 0
+        );
       }
     }
     return 0;
   };
 
   // Función helper para manejar el selector editable
-  const handleEnrollmentSelect = (enrollmentId: string, profIndex: number, detailIndex: number, isSpecial: boolean = false) => {
-    const selectedEnrollment = enrollments.find(e => e._id === enrollmentId);
+  const handleEnrollmentSelect = (
+    enrollmentId: string,
+    profIndex: number,
+    detailIndex: number,
+    isSpecial: boolean = false
+  ) => {
+    const selectedEnrollment = enrollments.find((e) => e._id === enrollmentId);
     if (!selectedEnrollment) return;
 
     // Buscar el enrollment en los datos del reporte para obtener la información completa
     let enrollmentData: any = null;
-    
+
     // Buscar en reportes generales
     if (reportData?.general) {
-      reportData.general.forEach(prof => {
-        prof.details.forEach(detail => {
-          if (detail.enrollmentId === enrollmentId && detail.type === 'normal') {
+      reportData.general.forEach((prof) => {
+        prof.details.forEach((detail) => {
+          if (
+            detail.enrollmentId === enrollmentId &&
+            detail.type === "normal"
+          ) {
             enrollmentData = detail;
           }
         });
       });
     }
-    
+
     // Buscar en reporte especial
     if (!enrollmentData && reportData?.special) {
-      reportData.special.details.forEach(detail => {
-        if (detail.enrollmentId === enrollmentId && detail.type === 'normal') {
+      reportData.special.details.forEach((detail) => {
+        if (detail.enrollmentId === enrollmentId && detail.type === "normal") {
           enrollmentData = detail;
         }
       });
     }
 
     if (isSpecial) {
-      updateSpecialDetailField(detailIndex, "enrollmentId" as any, enrollmentId);
-      updateSpecialDetailField(detailIndex, "studentName" as any, formatEnrollmentName(selectedEnrollment));
-      updateSpecialDetailField(detailIndex, "plan" as any, selectedEnrollment.planId.name);
-      
+      updateSpecialDetailField(
+        detailIndex,
+        "enrollmentId" as any,
+        enrollmentId
+      );
+      updateSpecialDetailField(
+        detailIndex,
+        "studentName" as any,
+        formatEnrollmentName(selectedEnrollment)
+      );
+      updateSpecialDetailField(
+        detailIndex,
+        "plan" as any,
+        selectedEnrollment.planId.name
+      );
+
       // Llenar campos específicos de suplencia si encontramos los datos del enrollment
       if (enrollmentData) {
-        updateSpecialDetailField(detailIndex, "totalHours" as any, enrollmentData.totalHours);
-        updateSpecialDetailField(detailIndex, "pricePerHour" as any, enrollmentData.pricePerHour);
+        updateSpecialDetailField(
+          detailIndex,
+          "totalHours" as any,
+          enrollmentData.totalHours
+        );
+        updateSpecialDetailField(
+          detailIndex,
+          "pricePerHour" as any,
+          enrollmentData.pricePerHour
+        );
         // pPerHour del profesor especial basado en el tipo de enrollment
-        updateSpecialDetailField(detailIndex, "pPerHour" as any, getCurrentProfessorPayPerHour(profIndex, enrollmentId, true));
+        updateSpecialDetailField(
+          detailIndex,
+          "pPerHour" as any,
+          getCurrentProfessorPayPerHour(profIndex, enrollmentId, true)
+        );
         // amountInDollars no se llena (las suplencias no dependen de ingresos)
         // balance se llena con el balance disponible considerando suplencias previas
-        updateSpecialDetailField(detailIndex, "balance" as any, getAvailableBalanceForSubstituteV2(enrollmentId, {profIndex: -1, detailIndex}));
+        updateSpecialDetailField(
+          detailIndex,
+          "balance" as any,
+          getAvailableBalanceForSubstituteV2(enrollmentId, {
+            profIndex: -1,
+            detailIndex,
+          })
+        );
       }
     } else {
       updateDetailField(profIndex, detailIndex, "enrollmentId", enrollmentId);
-      updateDetailField(profIndex, detailIndex, "studentName", formatEnrollmentName(selectedEnrollment));
-      updateDetailField(profIndex, detailIndex, "plan", selectedEnrollment.planId.name);
-      
+      updateDetailField(
+        profIndex,
+        detailIndex,
+        "studentName",
+        formatEnrollmentName(selectedEnrollment)
+      );
+      updateDetailField(
+        profIndex,
+        detailIndex,
+        "plan",
+        selectedEnrollment.planId.name
+      );
+
       // Llenar campos específicos de suplencia si encontramos los datos del enrollment
       if (enrollmentData) {
-        updateDetailField(profIndex, detailIndex, "totalHours", enrollmentData.totalHours);
-        updateDetailField(profIndex, detailIndex, "pricePerHour", enrollmentData.pricePerHour);
+        updateDetailField(
+          profIndex,
+          detailIndex,
+          "totalHours",
+          enrollmentData.totalHours
+        );
+        updateDetailField(
+          profIndex,
+          detailIndex,
+          "pricePerHour",
+          enrollmentData.pricePerHour
+        );
         // pPerHour del profesor actual que está haciendo la suplencia basado en el tipo de enrollment
-        updateDetailField(profIndex, detailIndex, "pPerHour", getCurrentProfessorPayPerHour(profIndex, enrollmentId, false));
+        updateDetailField(
+          profIndex,
+          detailIndex,
+          "pPerHour",
+          getCurrentProfessorPayPerHour(profIndex, enrollmentId, false)
+        );
         // amountInDollars no se llena (las suplencias no dependen de ingresos)
         // balance se llena con el balance disponible considerando suplencias previas
-        updateDetailField(profIndex, detailIndex, "balance", getAvailableBalanceForSubstituteV2(enrollmentId, {profIndex, detailIndex}));
+        updateDetailField(
+          profIndex,
+          detailIndex,
+          "balance",
+          getAvailableBalanceForSubstituteV2(enrollmentId, {
+            profIndex,
+            detailIndex,
+          })
+        );
       }
     }
-  };
-
-  // Función para calcular balances dinámicos por enrollment
-  const calculateEnrollmentBalances = () => {
-    const balances: EnrollmentBalance[] = [];
-    
-    enrollments.forEach(enrollment => {
-      let totalUsed = 0;
-      let usedInNormal = 0;
-      let usedInSubstitutes = 0;
-      
-      // Sumar uso en clases normales y suplencias de reportes generales
-      if (reportData?.general) {
-        reportData.general.forEach(prof => {
-          prof.details.forEach(detail => {
-            if (detail.enrollmentId === enrollment._id) {
-              if (detail.type === 'normal') {
-                usedInNormal += detail.amountInDollars || 0;
-              } else if (detail.type === 'substitute') {
-                usedInSubstitutes += detail.amountInDollars || 0;
-              }
-              totalUsed += detail.amountInDollars || 0;
-            }
-          });
-        });
-      }
-      
-      // Sumar uso en reporte especial
-      if (reportData?.special) {
-        reportData.special.details.forEach(detail => {
-          if (detail.enrollmentId === enrollment._id) {
-            if (detail.type === 'normal') {
-              usedInNormal += detail.amountInDollars || 0;
-            } else if (detail.type === 'substitute') {
-              usedInSubstitutes += detail.amountInDollars || 0;
-            }
-            totalUsed += detail.amountInDollars || 0;
-          }
-        });
-      }
-      
-      // Sumar uso en excedentes
-      excedents.forEach(excedent => {
-        if (excedent.enrollmentId === enrollment._id) {
-          totalUsed += excedent.amountInDollars || 0;
-        }
-      });
-      
-      const initialBalance = enrollment.initialBalance || 0;
-      const remaining = initialBalance - totalUsed;
-      
-      balances.push({
-        enrollmentId: enrollment._id,
-        studentName: enrollment.studentIds.map(s => s.name).join(", "),
-        planName: enrollment.planId.name,
-        totalAvailable: initialBalance,
-        usedInNormal,
-        usedInSubstitutes,
-        remaining: Math.max(0, remaining) // No permitir balance negativo
-      });
-    });
-    
-    setEnrollmentBalances(balances);
-    return balances;
   };
 
   // Función helper para manejar onChange de inputs numéricos
@@ -582,7 +546,7 @@ function NewReportComponent() {
   ) => {
     const value = e.target.value;
     const numValue = value === "" ? null : Number(value);
-    
+
     updateDetailField(profIndex, detailIndex, field, numValue);
   };
 
@@ -594,20 +558,8 @@ function NewReportComponent() {
   ) => {
     const value = e.target.value;
     const numValue = value === "" ? null : Number(value);
-    
-    updateSpecialDetailField(detailIndex, field, numValue);
-  };
 
-  // Función helper para manejar onChange de inputs numéricos de excedentes
-  const handleExcedentNumberInputChange = (
-    rowIndex: number,
-    field: keyof ExcedentRow,
-    e: React.ChangeEvent<HTMLInputElement>
-  ) => {
-    const value = e.target.value;
-    const numValue = value === "" ? null : Number(value);
-    
-    updateExcedentField(rowIndex, field, numValue);
+    updateSpecialDetailField(detailIndex, field, numValue);
   };
 
   useEffect(() => {
@@ -623,6 +575,70 @@ function NewReportComponent() {
   // Recalcular balances cuando cambien los datos
   useEffect(() => {
     if (reportData && enrollments.length > 0) {
+      // Función para calcular balances dinámicos por enrollment
+      const calculateEnrollmentBalances = () => {
+        const balances: EnrollmentBalance[] = [];
+
+        enrollments.forEach((enrollment) => {
+          let totalUsed = 0;
+          let usedInNormal = 0;
+          let usedInSubstitutes = 0;
+
+          // Sumar uso en clases normales y suplencias de reportes generales
+          if (reportData?.general) {
+            reportData.general.forEach((prof) => {
+              prof.details.forEach((detail) => {
+                if (detail.enrollmentId === enrollment._id) {
+                  if (detail.type === "normal") {
+                    usedInNormal += detail.amountInDollars || 0;
+                  } else if (detail.type === "substitute") {
+                    usedInSubstitutes += detail.amountInDollars || 0;
+                  }
+                  totalUsed += detail.amountInDollars || 0;
+                }
+              });
+            });
+          }
+
+          // Sumar uso en reporte especial
+          if (reportData?.special) {
+            reportData.special.details.forEach((detail) => {
+              if (detail.enrollmentId === enrollment._id) {
+                if (detail.type === "normal") {
+                  usedInNormal += detail.amountInDollars || 0;
+                } else if (detail.type === "substitute") {
+                  usedInSubstitutes += detail.amountInDollars || 0;
+                }
+                totalUsed += detail.amountInDollars || 0;
+              }
+            });
+          }
+
+          // Sumar uso en excedentes
+          excedents.forEach((excedent) => {
+            if (excedent.enrollmentId === enrollment._id) {
+              totalUsed += excedent.amountInDollars || 0;
+            }
+          });
+
+          const initialBalance = enrollment.initialBalance || 0;
+          const remaining = initialBalance - totalUsed;
+
+          balances.push({
+            enrollmentId: enrollment._id,
+            studentName: enrollment.studentIds.map((s) => s.name).join(", "),
+            planName: enrollment.planId.name,
+            totalAvailable: initialBalance,
+            usedInNormal,
+            usedInSubstitutes,
+            remaining: Math.max(0, remaining), // No permitir balance negativo
+          });
+        });
+
+        setEnrollmentBalances(balances);
+        return balances;
+      };
+
       calculateEnrollmentBalances();
     }
   }, [reportData, excedents, enrollments]);
@@ -644,9 +660,13 @@ function NewReportComponent() {
           balanceRemaining = 0;
         if (detail.status === 1) {
           totalTeacher = (detail.hoursSeen || 0) * detail.pPerHour;
-          totalBespoke = detail.pricePerHour * (detail.hoursSeen || 0) - totalTeacher;
+          totalBespoke =
+            detail.pricePerHour * (detail.hoursSeen || 0) - totalTeacher;
           balanceRemaining =
-            (detail.amountInDollars || 0) + (detail.balance || 0) - totalTeacher - totalBespoke;
+            (detail.amountInDollars || 0) +
+            (detail.balance || 0) -
+            totalTeacher -
+            totalBespoke;
         } else {
           totalTeacher = detail.amountInDollars || 0;
           totalBespoke = 0;
@@ -678,7 +698,8 @@ function NewReportComponent() {
 
       const updatedDetails = reportData.special.details.map((detail) => {
         const total = detail.payment || 0;
-        const balanceRemaining = (detail.amountInDollars || 0) - (detail.payment || 0);
+        const balanceRemaining =
+          (detail.amountInDollars || 0) - (detail.payment || 0);
         subTotal += total;
         subTotalBalanceRemaining += balanceRemaining;
         return { ...detail, total, balanceRemaining };
@@ -714,7 +735,7 @@ function NewReportComponent() {
       },
       summary: { systemTotal, difference },
     };
-  }, [reportData, excedents, realTotal]);
+  }, [reportData, realTotal]);
 
   const updateDetailField = <K extends keyof ReportDetail>(
     profIndex: number,
@@ -762,8 +783,8 @@ function NewReportComponent() {
       totalBespoke: 0,
       balanceRemaining: 0,
       status: 2,
-      type: 'bonus',
-      bonusReason: '',
+      type: "bonus",
+      bonusReason: "",
     };
     newData.general[profIndex].details.push(newBonus);
     setReportData(newData);
@@ -790,7 +811,7 @@ function NewReportComponent() {
       totalBespoke: 0,
       balanceRemaining: 0,
       status: 1,
-      type: 'substitute',
+      type: "substitute",
     };
     newData.general[profIndex].details.push(newSubstitute);
     setReportData(newData);
@@ -825,8 +846,8 @@ function NewReportComponent() {
       payment: null,
       total: 0,
       balanceRemaining: 0,
-      type: 'bonus',
-      bonusReason: '',
+      type: "bonus",
+      bonusReason: "",
     };
     if (newData.special) {
       newData.special.details.push(newBonus);
@@ -854,7 +875,7 @@ function NewReportComponent() {
       payment: null,
       total: 0,
       balanceRemaining: 0,
-      type: 'substitute',
+      type: "substitute",
     };
     if (newData.special) {
       newData.special.details.push(newSubstitute);
@@ -878,42 +899,6 @@ function NewReportComponent() {
       newData.special.details.splice(detailIndex, 1);
       setReportData(newData);
     }
-  };
-
-  const addExcedentRow = () => {
-    const newRow: ExcedentRow = {
-      id: crypto.randomUUID(),
-      enrollmentId: "",
-      studentName: "",
-      amount: null,
-      amountInDollars: null,
-      hoursSeen: null,
-      pricePerHour: null,
-      total: 0,
-      notes: "",
-    };
-    setExcedents((prev) => [...prev, newRow]);
-  };
-
-  const updateExcedentField = <K extends keyof ExcedentRow>(
-    rowIndex: number,
-    field: K,
-    value: ExcedentRow[K]
-  ) => {
-    const newExcedents = [...excedents];
-    const currentRow = newExcedents[rowIndex];
-    (currentRow[field] as any) = value;
-    
-    if (field === "enrollmentId") {
-      const selectedEnrollment = enrollments.find((e) => e._id === value);
-      currentRow.studentName = selectedEnrollment ? formatEnrollmentName(selectedEnrollment) : "";
-    }
-    currentRow.total = (currentRow.hoursSeen || 0) * (currentRow.pricePerHour || 0);
-    setExcedents(newExcedents);
-  };
-
-  const removeExcedentRow = (id: string) => {
-    setExcedents((prev) => prev.filter((row) => row.id !== id));
   };
 
   const handleGeneratePdf = () => {
@@ -974,7 +959,11 @@ function NewReportComponent() {
             d.hoursSeen || "",
             `$${d.pPerHour.toFixed(2)}`,
             `$${(d.balance || 0).toFixed(2)}`,
-            d.type === 'normal' ? 'Normal' : d.type === 'substitute' ? 'Substitute' : 'Bonus',
+            d.type === "normal"
+              ? "Normal"
+              : d.type === "substitute"
+              ? "Substitute"
+              : "Bonus",
             `$${d.totalTeacher.toFixed(2)}`,
             `$${d.totalBespoke.toFixed(2)}`,
             `$${d.balanceRemaining.toFixed(2)}`,
@@ -1044,7 +1033,11 @@ function NewReportComponent() {
             d.hoursSeen || "",
             `$${(d.oldBalance || 0).toFixed(2)}`,
             `$${(d.payment || 0).toFixed(2)}`,
-            d.type === 'normal' ? 'Normal' : d.type === 'substitute' ? 'Substitute' : 'Bonus',
+            d.type === "normal"
+              ? "Normal"
+              : d.type === "substitute"
+              ? "Substitute"
+              : "Bonus",
             `$${d.total.toFixed(2)}`,
             `$${d.balanceRemaining.toFixed(2)}`,
           ]),
@@ -1161,9 +1154,9 @@ function NewReportComponent() {
       report: calculatedData.generalReport,
       specialProfessorReport: calculatedData.specialReport,
       excedents: { rows: excedents, total: calculatedData.excedentsTotal },
-      enrollmentBalances: enrollmentBalances.map(balance => ({
+      enrollmentBalances: enrollmentBalances.map((balance) => ({
         enrollmentId: balance.enrollmentId,
-        balanceRemaining: balance.remaining
+        balanceRemaining: balance.remaining,
       })),
       summary: {
         systemTotal: calculatedData.summary.systemTotal,
@@ -1260,7 +1253,7 @@ function NewReportComponent() {
                       >
                         <TableCell className="px-3">{detail.period}</TableCell>
                         <TableCell>
-                          {detail.type === 'normal' ? (
+                          {detail.type === "normal" ? (
                             <span className="px-1">{detail.plan}</span>
                           ) : (
                             <Input
@@ -1277,17 +1270,21 @@ function NewReportComponent() {
                           )}
                         </TableCell>
                         <TableCell>
-                          {detail.type === 'normal' ? (
+                          {detail.type === "normal" ? (
                             <span className="font-medium px-1">
                               {detail.studentName}
                             </span>
-                          ) : detail.type === 'substitute' ? (
+                          ) : detail.type === "substitute" ? (
                             <Popover
-                              open={openSelectors[`general-${profIndex}-${detailIndex}`] || false}
-                              onOpenChange={(open) => 
-                                setOpenSelectors(prev => ({
+                              open={
+                                openSelectors[
+                                  `general-${profIndex}-${detailIndex}`
+                                ] || false
+                              }
+                              onOpenChange={(open) =>
+                                setOpenSelectors((prev) => ({
                                   ...prev,
-                                  [`general-${profIndex}-${detailIndex}`]: open
+                                  [`general-${profIndex}-${detailIndex}`]: open,
                                 }))
                               }
                             >
@@ -1295,30 +1292,47 @@ function NewReportComponent() {
                                 <Button
                                   variant="outline"
                                   role="combobox"
-                                  aria-expanded={openSelectors[`general-${profIndex}-${detailIndex}`]}
+                                  aria-expanded={
+                                    openSelectors[
+                                      `general-${profIndex}-${detailIndex}`
+                                    ]
+                                  }
                                   className="w-full justify-between"
                                 >
-                                  {detail.enrollmentId ? 
-                                    formatEnrollmentName(enrollments.find(e => e._id === detail.enrollmentId)!) :
-                                    "Search student..."
-                                  }
+                                  {detail.enrollmentId
+                                    ? formatEnrollmentName(
+                                        enrollments.find(
+                                          (e) => e._id === detail.enrollmentId
+                                        )!
+                                      )
+                                    : "Search student..."}
                                 </Button>
                               </PopoverTrigger>
                               <PopoverContent className="w-full p-0">
                                 <Command>
                                   <CommandInput placeholder="Search student..." />
                                   <CommandList>
-                                    <CommandEmpty>No student found.</CommandEmpty>
+                                    <CommandEmpty>
+                                      No student found.
+                                    </CommandEmpty>
                                     <CommandGroup>
                                       {enrollments.map((enrollment) => (
                                         <CommandItem
                                           key={enrollment._id}
-                                          value={formatEnrollmentName(enrollment)}
+                                          value={formatEnrollmentName(
+                                            enrollment
+                                          )}
                                           onSelect={() => {
-                                            handleEnrollmentSelect(enrollment._id, profIndex, detailIndex, false);
-                                            setOpenSelectors(prev => ({
+                                            handleEnrollmentSelect(
+                                              enrollment._id,
+                                              profIndex,
+                                              detailIndex,
+                                              false
+                                            );
+                                            setOpenSelectors((prev) => ({
                                               ...prev,
-                                              [`general-${profIndex}-${detailIndex}`]: false
+                                              [`general-${profIndex}-${detailIndex}`]:
+                                                false,
                                             }));
                                           }}
                                         >
@@ -1435,10 +1449,16 @@ function NewReportComponent() {
                           />
                         </TableCell>
                         <TableCell className="text-center">
-                          <span className="text-lg" title={
-                            detail.type === 'normal' ? 'Clase Normal' :
-                            detail.type === 'substitute' ? 'Suplencia' : 'Bono Manual'
-                          }>
+                          <span
+                            className="text-lg"
+                            title={
+                              detail.type === "normal"
+                                ? "Clase Normal"
+                                : detail.type === "substitute"
+                                ? "Suplencia"
+                                : "Bono Manual"
+                            }
+                          >
                             {getTypeIndicator(detail.type)}
                           </span>
                         </TableCell>
@@ -1452,14 +1472,16 @@ function NewReportComponent() {
                           {detail.balanceRemaining.toFixed(2)}
                         </TableCell>
                         <TableCell>
-                          {(detail.type === 'bonus' || detail.type === 'substitute') && (
+                          {(detail.type === "bonus" ||
+                            detail.type === "substitute") && (
                             <Button
                               variant="ghost"
                               size="icon"
-                              onClick={() =>
-                                detail.type === 'bonus' ? 
-                                  removeBonus(profIndex, detailIndex) :
-                                  removeBonus(profIndex, detailIndex) // TODO: Crear removeSubstitute
+                              onClick={
+                                () =>
+                                  detail.type === "bonus"
+                                    ? removeBonus(profIndex, detailIndex)
+                                    : removeBonus(profIndex, detailIndex) // TODO: Crear removeSubstitute
                               }
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />
@@ -1539,9 +1561,11 @@ function NewReportComponent() {
                     {calculatedData.specialReport.details.map(
                       (detail, detailIndex) => (
                         <TableRow key={detail.enrollmentId}>
-                          <TableCell className="px-3">{detail.period}</TableCell>
+                          <TableCell className="px-3">
+                            {detail.period}
+                          </TableCell>
                           <TableCell>
-                            {detail.type === 'normal' ? (
+                            {detail.type === "normal" ? (
                               <span className="px-1">{detail.plan}</span>
                             ) : (
                               <Input
@@ -1557,17 +1581,20 @@ function NewReportComponent() {
                             )}
                           </TableCell>
                           <TableCell>
-                            {detail.type === 'normal' ? (
+                            {detail.type === "normal" ? (
                               <span className="font-medium px-1">
                                 {detail.studentName}
                               </span>
-                            ) : detail.type === 'substitute' ? (
+                            ) : detail.type === "substitute" ? (
                               <Popover
-                                open={openSelectors[`special-${detailIndex}`] || false}
-                                onOpenChange={(open) => 
-                                  setOpenSelectors(prev => ({
+                                open={
+                                  openSelectors[`special-${detailIndex}`] ||
+                                  false
+                                }
+                                onOpenChange={(open) =>
+                                  setOpenSelectors((prev) => ({
                                     ...prev,
-                                    [`special-${detailIndex}`]: open
+                                    [`special-${detailIndex}`]: open,
                                   }))
                                 }
                               >
@@ -1575,30 +1602,45 @@ function NewReportComponent() {
                                   <Button
                                     variant="outline"
                                     role="combobox"
-                                    aria-expanded={openSelectors[`special-${detailIndex}`]}
+                                    aria-expanded={
+                                      openSelectors[`special-${detailIndex}`]
+                                    }
                                     className="w-full justify-between"
                                   >
-                                    {detail.enrollmentId ? 
-                                      formatEnrollmentName(enrollments.find(e => e._id === detail.enrollmentId)!) :
-                                      "Search student..."
-                                    }
+                                    {detail.enrollmentId
+                                      ? formatEnrollmentName(
+                                          enrollments.find(
+                                            (e) => e._id === detail.enrollmentId
+                                          )!
+                                        )
+                                      : "Search student..."}
                                   </Button>
                                 </PopoverTrigger>
                                 <PopoverContent className="w-full p-0">
                                   <Command>
                                     <CommandInput placeholder="Search student..." />
                                     <CommandList>
-                                      <CommandEmpty>No student found.</CommandEmpty>
+                                      <CommandEmpty>
+                                        No student found.
+                                      </CommandEmpty>
                                       <CommandGroup>
                                         {enrollments.map((enrollment) => (
                                           <CommandItem
                                             key={enrollment._id}
-                                            value={formatEnrollmentName(enrollment)}
+                                            value={formatEnrollmentName(
+                                              enrollment
+                                            )}
                                             onSelect={() => {
-                                              handleEnrollmentSelect(enrollment._id, 0, detailIndex, true);
-                                              setOpenSelectors(prev => ({
+                                              handleEnrollmentSelect(
+                                                enrollment._id,
+                                                0,
+                                                detailIndex,
+                                                true
+                                              );
+                                              setOpenSelectors((prev) => ({
                                                 ...prev,
-                                                [`special-${detailIndex}`]: false
+                                                [`special-${detailIndex}`]:
+                                                  false,
                                               }));
                                             }}
                                           >
@@ -1694,10 +1736,16 @@ function NewReportComponent() {
                             />
                           </TableCell>
                           <TableCell className="text-center">
-                            <span className="text-lg" title={
-                              detail.type === 'normal' ? 'Clase Normal' :
-                              detail.type === 'substitute' ? 'Suplencia' : 'Bono Manual'
-                            }>
+                            <span
+                              className="text-lg"
+                              title={
+                                detail.type === "normal"
+                                  ? "Clase Normal"
+                                  : detail.type === "substitute"
+                                  ? "Suplencia"
+                                  : "Bono Manual"
+                              }
+                            >
                               {getTypeIndicator(detail.type)}
                             </span>
                           </TableCell>
@@ -1708,14 +1756,15 @@ function NewReportComponent() {
                             {detail.balanceRemaining.toFixed(2)}
                           </TableCell>
                           <TableCell>
-                            {(detail.type === 'bonus' || detail.type === 'substitute') && (
+                            {(detail.type === "bonus" ||
+                              detail.type === "substitute") && (
                               <Button
                                 variant="ghost"
                                 size="icon"
                                 onClick={() =>
-                                  detail.type === 'bonus' ? 
-                                    removeSpecialBonus(detailIndex) :
-                                    removeSpecialSubstitute(detailIndex)
+                                  detail.type === "bonus"
+                                    ? removeSpecialBonus(detailIndex)
+                                    : removeSpecialSubstitute(detailIndex)
                                 }
                               >
                                 <Trash2 className="h-4 w-4 text-destructive" />
@@ -1749,10 +1798,14 @@ function NewReportComponent() {
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-bold text-base">
-                        ${calculatedData.specialReport.subtotal.total.toFixed(2)}
+                        $
+                        {calculatedData.specialReport.subtotal.total.toFixed(2)}
                       </TableCell>
                       <TableCell className="text-right font-bold text-base text-blue-600">
-                        ${calculatedData.specialReport.subtotal.balanceRemaining.toFixed(2)}
+                        $
+                        {calculatedData.specialReport.subtotal.balanceRemaining.toFixed(
+                          2
+                        )}
                       </TableCell>
                       <TableCell></TableCell>
                     </TableRow>
@@ -1768,7 +1821,8 @@ function NewReportComponent() {
             <CardHeader>
               <CardTitle>Excedents</CardTitle>
               <p className="text-sm text-muted-foreground">
-                {reportData.excedente.reportDateRange} - {reportData.excedente.numberOfIncomes} incomes
+                {reportData.excedente.reportDateRange} -{" "}
+                {reportData.excedente.numberOfIncomes} incomes
               </p>
             </CardHeader>
             <CardContent>
@@ -1785,13 +1839,17 @@ function NewReportComponent() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {reportData.excedente.details.map((detail, index) => (
+                  {reportData.excedente.details.map((detail) => (
                     <TableRow key={detail.incomeId}>
-                      <TableCell>{formatDateForDisplay(detail.income_date)}</TableCell>
+                      <TableCell>
+                        {formatDateForDisplay(detail.income_date)}
+                      </TableCell>
                       <TableCell>{detail.deposit_name}</TableCell>
                       <TableCell>{detail.amount.toFixed(2)}</TableCell>
                       <TableCell>{detail.divisa}</TableCell>
-                      <TableCell>${detail.amountInDollars.toFixed(2)}</TableCell>
+                      <TableCell>
+                        ${detail.amountInDollars.toFixed(2)}
+                      </TableCell>
                       <TableCell>{detail.paymentMethod}</TableCell>
                       <TableCell>{detail.note}</TableCell>
                     </TableRow>

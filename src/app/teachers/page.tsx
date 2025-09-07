@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from "react";
 import { apiClient } from "@/lib/api";
-import { formatDateForDisplay, getCurrentDateString, extractDatePart } from "@/lib/dateUtils";
+import { formatDateForDisplay, extractDatePart } from "@/lib/dateUtils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import {
@@ -16,8 +16,17 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { DataTable } from "@/components/ui/data-table"; // <-- IMPORTAMOS EL NUEVO COMPONENTE
-import { Plus, Pencil, Ban, CheckCircle2, Loader2, Trash2, Eye, ArrowUpDown } from "lucide-react";
+import { DataTable } from "@/components/ui/data-table";
+import {
+  Plus,
+  Pencil,
+  Ban,
+  CheckCircle2,
+  Loader2,
+  Trash2,
+  Eye,
+  ArrowUpDown,
+} from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import type { ColumnDef } from "@tanstack/react-table";
 
@@ -80,7 +89,7 @@ const formatDateForInput = (dateString?: string | null) => {
   try {
     return extractDatePart(dateString);
   } catch (e) {
-    console.log("error: ", e)
+    console.log("error: ", e);
     return "";
   }
 };
@@ -267,8 +276,8 @@ export default function TeachersPage() {
 
   // --- DEFINICIÓN DE COLUMNAS PARA LA TABLA REUTILIZABLE ---
   const columns: ColumnDef<Professor>[] = [
-    { 
-      accessorKey: "name", 
+    {
+      accessorKey: "name",
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -281,8 +290,8 @@ export default function TeachersPage() {
       ),
       sortingFn: stringLocaleSort(),
     },
-    { 
-      accessorKey: "email", 
+    {
+      accessorKey: "email",
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -295,8 +304,8 @@ export default function TeachersPage() {
       ),
       sortingFn: stringLocaleSort(),
     },
-    { 
-      accessorKey: "phone", 
+    {
+      accessorKey: "phone",
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -413,7 +422,7 @@ export default function TeachersPage() {
           </CardContent>
         </Card>
       )}
-      
+
       <Dialog
         open={openDialog !== null}
         onOpenChange={(isOpen) => !isOpen && handleClose()}
@@ -422,7 +431,7 @@ export default function TeachersPage() {
           <DialogHeader>
             <DialogTitle>
               {openDialog === "create" && "Add New Teacher"}
-              {openDialog === "edit" && "Edit Teacher's Information"}
+              {openDialog === "edit" && "Edit Teacher&apos;s Information"}
               {openDialog === "view" && "Teacher Details"}
               {openDialog === "status" && `Confirm Status Change`}
             </DialogTitle>
@@ -697,11 +706,15 @@ export default function TeachersPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
                 <div>
                   <Label className="font-semibold">Full Name</Label>
-                  <p className="text-sm font-semibold">{selectedTeacher.name}</p>
+                  <p className="text-sm font-semibold">
+                    {selectedTeacher.name}
+                  </p>
                 </div>
                 <div>
                   <Label className="font-semibold">CI Number</Label>
-                  <p className="text-sm font-semibold">{selectedTeacher.ciNumber}</p>
+                  <p className="text-sm font-semibold">
+                    {selectedTeacher.ciNumber}
+                  </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Email</Label>
@@ -714,18 +727,24 @@ export default function TeachersPage() {
                 <div>
                   <Label className="font-semibold">Date of Birth</Label>
                   <p className="text-sm">
-                    {selectedTeacher.dob ? formatDateForDisplay(selectedTeacher.dob) : "N/A"}
+                    {selectedTeacher.dob
+                      ? formatDateForDisplay(selectedTeacher.dob)
+                      : "N/A"}
                   </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Start Date</Label>
                   <p className="text-sm">
-                    {selectedTeacher.startDate ? formatDateForDisplay(selectedTeacher.startDate) : "N/A"}
+                    {selectedTeacher.startDate
+                      ? formatDateForDisplay(selectedTeacher.startDate)
+                      : "N/A"}
                   </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Occupation</Label>
-                  <p className="text-sm">{selectedTeacher.occupation || "N/A"}</p>
+                  <p className="text-sm">
+                    {selectedTeacher.occupation || "N/A"}
+                  </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Status</Label>
@@ -745,60 +764,100 @@ export default function TeachersPage() {
                 </div>
               </div>
 
-              {selectedTeacher.emergencyContact && (
-                selectedTeacher.emergencyContact.name || selectedTeacher.emergencyContact.phone
-              ) && (
-                <div className="border p-4 rounded-md">
-                  <h3 className="text-lg font-medium mb-4">Emergency Contact</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-sm text-muted-foreground font-semibold">Name</Label>
-                      <p className="text-sm">{selectedTeacher.emergencyContact.name || "N/A"}</p>
-                    </div>
-                    <div>
-                      <Label className="text-sm text-muted-foreground font-semibold">Phone</Label>
-                      <p className="text-sm">{selectedTeacher.emergencyContact.phone || "N/A"}</p>
-                    </div>
-                  </div>
-                </div>
-              )}
-
-              {selectedTeacher.paymentData && selectedTeacher.paymentData.length > 0 && (
-                <div>
-                  <h3 className="text-lg font-semibold pb-1">Payment Data</h3>
-                  {selectedTeacher.paymentData.map((payment, index) => (
-                    <div key={payment._id || index} className="border p-4 rounded-md mb-4">
-                      <h4 className="font-semibold mb-3">Method {index + 1}</h4>
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                        <div>
-                          <Label className="text-sm text-muted-foreground">Bank Name</Label>
-                          <p className="text-sm">{payment.bankName || "N/A"}</p>
-                        </div>
-                        <div>
-                          <Label className="text-sm text-muted-foreground">Account Type</Label>
-                          <p className="text-sm">{payment.accountType || "N/A"}</p>
-                        </div>
-                        <div>
-                          <Label className="text-sm text-muted-foreground">Account Number</Label>
-                          <p className="text-sm">{payment.accountNumber || "N/A"}</p>
-                        </div>
-                        <div>
-                          <Label className="text-sm text-muted-foreground">Holder's Name</Label>
-                          <p className="text-sm">{payment.holderName || "N/A"}</p>
-                        </div>
-                        <div>
-                          <Label className="text-sm text-muted-foreground">Holder's CI</Label>
-                          <p className="text-sm">{payment.holderCI || "N/A"}</p>
-                        </div>
-                        <div>
-                          <Label className="text-sm text-muted-foreground">Holder's Email</Label>
-                          <p className="text-sm">{payment.holderEmail || "N/A"}</p>
-                        </div>
+              {selectedTeacher.emergencyContact &&
+                (selectedTeacher.emergencyContact.name ||
+                  selectedTeacher.emergencyContact.phone) && (
+                  <div className="border p-4 rounded-md">
+                    <h3 className="text-lg font-medium mb-4">
+                      Emergency Contact
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-sm text-muted-foreground font-semibold">
+                          Name
+                        </Label>
+                        <p className="text-sm">
+                          {selectedTeacher.emergencyContact.name || "N/A"}
+                        </p>
+                      </div>
+                      <div>
+                        <Label className="text-sm text-muted-foreground font-semibold">
+                          Phone
+                        </Label>
+                        <p className="text-sm">
+                          {selectedTeacher.emergencyContact.phone || "N/A"}
+                        </p>
                       </div>
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+                )}
+
+              {selectedTeacher.paymentData &&
+                selectedTeacher.paymentData.length > 0 && (
+                  <div>
+                    <h3 className="text-lg font-semibold pb-1">Payment Data</h3>
+                    {selectedTeacher.paymentData.map((payment, index) => (
+                      <div
+                        key={payment._id || index}
+                        className="border p-4 rounded-md mb-4"
+                      >
+                        <h4 className="font-semibold mb-3">
+                          Method {index + 1}
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <div>
+                            <Label className="text-sm text-muted-foreground">
+                              Bank Name
+                            </Label>
+                            <p className="text-sm">
+                              {payment.bankName || "N/A"}
+                            </p>
+                          </div>
+                          <div>
+                            <Label className="text-sm text-muted-foreground">
+                              Account Type
+                            </Label>
+                            <p className="text-sm">
+                              {payment.accountType || "N/A"}
+                            </p>
+                          </div>
+                          <div>
+                            <Label className="text-sm text-muted-foreground">
+                              Account Number
+                            </Label>
+                            <p className="text-sm">
+                              {payment.accountNumber || "N/A"}
+                            </p>
+                          </div>
+                          <div>
+                            <Label className="text-sm text-muted-foreground">
+                              Holder&apos;s Name
+                            </Label>
+                            <p className="text-sm">
+                              {payment.holderName || "N/A"}
+                            </p>
+                          </div>
+                          <div>
+                            <Label className="text-sm text-muted-foreground">
+                              Holder&apos;s CI
+                            </Label>
+                            <p className="text-sm">
+                              {payment.holderCI || "N/A"}
+                            </p>
+                          </div>
+                          <div>
+                            <Label className="text-sm text-muted-foreground">
+                              Holder&apos;s Email
+                            </Label>
+                            <p className="text-sm">
+                              {payment.holderEmail || "N/A"}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
 
               <DialogFooter className="pt-4 border-t">
                 <Button variant="outline" onClick={handleClose}>

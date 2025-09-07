@@ -1,6 +1,6 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { apiClient } from "@/lib/api";
@@ -134,7 +134,9 @@ export default function ReportHistoryPage() {
             <DialogTitle>Create New Report</DialogTitle>
           </DialogHeader>
           <DialogDescription className="py-4">
-            <Label className="pb-2" htmlFor="month-select">Select Report Month</Label>
+            <Label className="pb-2" htmlFor="month-select">
+              Select Report Month
+            </Label>
             <Input
               id="month-select"
               type="month"

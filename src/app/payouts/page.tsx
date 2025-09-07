@@ -1,9 +1,14 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */"use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
 
 import { useState, useEffect, useMemo } from "react";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { formatDateForDisplay, createDateSortingFunction, getCurrentDateString, dateStringToISO } from "@/lib/dateUtils";
+import {
+  formatDateForDisplay,
+  getCurrentDateString,
+  extractDatePart,
+} from "@/lib/dateUtils";
 import { apiClient } from "@/lib/api";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
@@ -291,20 +296,22 @@ export default function PayoutsPage() {
     if (!searchTerm.trim()) return payouts;
 
     const term = searchTerm.toLowerCase().trim();
-    
+
     return payouts.filter((payout) => {
       // Buscar por profesor
-      const professorMatch = payout.professorId?.name?.toLowerCase().includes(term);
-      
+      const professorMatch = payout.professorId?.name
+        ?.toLowerCase()
+        .includes(term);
+
       // Buscar por mes
       const monthMatch = payout.month?.toLowerCase().includes(term);
-      
+
       // Buscar por total pagado
       const totalMatch = payout.total?.toString().includes(term);
-      
+
       // Buscar por fecha de pago
       const paidAtMatch = formatDateForDisplay(payout.paidAt).includes(term);
-      
+
       return professorMatch || monthMatch || totalMatch || paidAtMatch;
     });
   }, [payouts, searchTerm]);
@@ -579,7 +586,7 @@ export default function PayoutsPage() {
       sortingFn: stringLocaleSort(),
       cell: ({ row }) => row.original.professorId?.name || "N/A",
     },
-    { 
+    {
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -620,7 +627,11 @@ export default function PayoutsPage() {
         </Button>
       ),
       accessorKey: "paidAt",
-      sortingFn: createDateSortingFunction("paidAt"),
+      sortingFn: (rowA: any, rowB: any) => {
+        const dateA = extractDatePart(String(rowA.original.paidAt || ""));
+        const dateB = extractDatePart(String(rowB.original.paidAt || ""));
+        return dateA.localeCompare(dateB);
+      },
       cell: ({ row }) => formatDateForDisplay(row.original.paidAt),
     },
     {

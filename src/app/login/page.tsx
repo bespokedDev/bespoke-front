@@ -1,10 +1,9 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
-'use client';
+"use client";
 
-import { useState } from 'react';
-// CORRECCIÓN: Se usan rutas relativas para evitar problemas de resolución de alias.
-import { useAuth } from '../../contexts/AuthContext'; 
-import { apiClient } from '../../lib/api'; 
+import { useState } from "react";
+import { useAuth } from "../../contexts/AuthContext";
+import { apiClient } from "../../lib/api";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -18,8 +17,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 
 export default function LoginPage() {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const { login } = useAuth();
@@ -30,18 +29,20 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      const response = await apiClient('api/users/login', {
-        method: 'POST',
+      const response = await apiClient("api/users/login", {
+        method: "POST",
         body: JSON.stringify({ email, password }),
       });
 
       if (response.token && response.user) {
         login(response.token, response.user);
       } else {
-        setError('Login failed: Invalid response from server.');
+        setError("Login failed: Invalid response from server.");
       }
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred. Please try again.');
+      setError(
+        err.message || "An unexpected error occurred. Please try again."
+      );
     } finally {
       setIsLoading(false);
     }
@@ -51,7 +52,9 @@ export default function LoginPage() {
     <div className="flex items-center justify-center min-h-screen bg-lightBackground dark:bg-darkBackground">
       <Card className="w-full max-w-sm bg-lightCard dark:bg-darkCard border-lightBorder dark:border-darkBorder">
         <CardHeader>
-          <CardTitle className="text-2xl text-lightText dark:text-darkText">Login</CardTitle>
+          <CardTitle className="text-2xl text-lightText dark:text-darkText">
+            Login
+          </CardTitle>
           <CardDescription className="text-lightSubtext dark:text-darkSubtext">
             Enter your username below to login to your account.
           </CardDescription>
@@ -59,7 +62,12 @@ export default function LoginPage() {
         <form onSubmit={handleSubmit}>
           <CardContent className="grid gap-4">
             <div className="grid gap-2">
-              <Label htmlFor="email" className="text-lightText dark:text-darkText">User</Label>
+              <Label
+                htmlFor="email"
+                className="text-lightText dark:text-darkText"
+              >
+                User
+              </Label>
               <Input
                 id="email"
                 type="text"
@@ -72,7 +80,12 @@ export default function LoginPage() {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="password" className="text-lightText dark:text-darkText">Password</Label>
+              <Label
+                htmlFor="password"
+                className="text-lightText dark:text-darkText"
+              >
+                Password
+              </Label>
               <Input
                 id="password"
                 type="password"
@@ -83,13 +96,15 @@ export default function LoginPage() {
                 className="bg-transparent text-lightText dark:text-darkText border-lightBorder dark:border-darkBorder placeholder:text-lightSubtext/70 focus-visible:ring-primary"
               />
             </div>
-            {error && (
-              <p className="text-sm text-accent1">{error}</p>
-            )}
+            {error && <p className="text-sm text-accent1">{error}</p>}
           </CardContent>
           <CardFooter>
-            <Button className="w-full bg-primary text-white hover:bg-primary/90" type="submit" disabled={isLoading}>
-              {isLoading ? 'Signing in...' : 'Sign in'}
+            <Button
+              className="w-full bg-primary text-white hover:bg-primary/90"
+              type="submit"
+              disabled={isLoading}
+            >
+              {isLoading ? "Signing in..." : "Sign in"}
             </Button>
           </CardFooter>
         </form>

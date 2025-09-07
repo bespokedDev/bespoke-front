@@ -1,9 +1,14 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */ "use client";
-import { useState, useEffect, useMemo } from "react";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
+import { useState, useEffect } from "react";
 import type { ColumnDef } from "@tanstack/react-table";
 import { ArrowUpDown } from "lucide-react";
 import { apiClient } from "@/lib/api";
-import { formatDateForDisplay, getCurrentDateString, extractDatePart } from "@/lib/dateUtils";
+import {
+  formatDateForDisplay,
+  getCurrentDateString,
+  extractDatePart,
+} from "@/lib/dateUtils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -84,10 +89,6 @@ interface Enrollment {
   language?: string; // 👈 NUEVO
 }
 
-type EnrollmentWithSearch = Enrollment & {
-  searchableString: string;
-};
-
 type EnrollmentFormData = {
   planId: string;
   studentIds: string[];
@@ -164,7 +165,9 @@ export default function EnrollmentsPage() {
         // Handle API response structure for plans
         setPlans(planData.plans || planData || []);
         setStudents(studentData);
-        const sortedProfessors = professorData.sort((a: any, b: any) => a.name.localeCompare(b.name));
+        const sortedProfessors = professorData.sort((a: any, b: any) =>
+          a.name.localeCompare(b.name)
+        );
         setProfessors(sortedProfessors);
       } catch (err: any) {
         setError(err.message || "Failed to fetch data.");
@@ -512,7 +515,13 @@ export default function EnrollmentsPage() {
             <DataTable
               columns={columns}
               data={enrollments}
-              searchKeys={["aliasOrStudents", "language", "planWithType", "professor", "statusText"]}
+              searchKeys={[
+                "aliasOrStudents",
+                "language",
+                "planWithType",
+                "professor",
+                "statusText",
+              ]}
               searchPlaceholder="Search enrollments..."
             />
           </CardContent>

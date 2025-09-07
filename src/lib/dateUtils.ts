@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
 /**
  * Utility functions for consistent date handling across the application
  * Solves timezone issues and provides consistent date formatting
@@ -10,7 +11,7 @@
  */
 export function extractDatePart(isoDateString: string): string {
   if (!isoDateString) return "";
-  return isoDateString.split('T')[0];
+  return isoDateString.split("T")[0];
 }
 
 /**
@@ -30,8 +31,8 @@ export function formatDateForDisplay(isoDateString: string): string {
  */
 export function createDateSortingFunction(dateField: string) {
   return (rowA: any, rowB: any) => {
-    const dateA = extractDatePart(rowA.original[dateField] || "");
-    const dateB = extractDatePart(rowB.original[dateField] || "");
+    const dateA = extractDatePart(String(rowA.original[dateField] || ""));
+    const dateB = extractDatePart(String(rowB.original[dateField] || ""));
     return dateA.localeCompare(dateB); // ISO format sorts correctly
   };
 }
@@ -41,7 +42,7 @@ export function createDateSortingFunction(dateField: string) {
  * @returns Current date as string "YYYY-MM-DD"
  */
 export function getCurrentDateString(): string {
-  return new Date().toISOString().split('T')[0];
+  return new Date().toISOString().split("T")[0];
 }
 
 /**

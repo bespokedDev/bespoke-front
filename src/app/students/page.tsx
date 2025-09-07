@@ -3,7 +3,11 @@
 
 import { useState, useEffect } from "react";
 import { apiClient } from "@/lib/api";
-import { formatDateForDisplay, getCurrentDateString, extractDatePart } from "@/lib/dateUtils";
+import {
+  formatDateForDisplay,
+  getCurrentDateString,
+  extractDatePart,
+} from "@/lib/dateUtils";
 import { PageHeader } from "@/components/ui/page-header";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -26,7 +30,16 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { DataTable } from "@/components/ui/data-table";
-import { Plus, Pencil, Ban, CheckCircle2, Loader2, Trash2, Eye, ArrowUpDown } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Ban,
+  CheckCircle2,
+  Loader2,
+  Trash2,
+  Eye,
+  ArrowUpDown,
+} from "lucide-react";
 import type { ColumnDef } from "@tanstack/react-table";
 
 // --- DEFINICIONES DE TIPOS ---
@@ -168,7 +181,10 @@ export default function StudentsPage() {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
-  const handleSelectChange = (name: keyof StudentFormData, value: string | number) => {
+  const handleSelectChange = (
+    name: keyof StudentFormData,
+    value: string | number
+  ) => {
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
   const handleNoteChange = (
@@ -221,15 +237,15 @@ export default function StudentsPage() {
     if (!selectedStudent) return;
     setIsSubmitting(true);
     setDialogError(null);
-    
+
     // Cambiar entre activo (1) e inactivo (0)
     const newStatus = selectedStudent.status === 1 ? 0 : 1;
     const body: { status: number; reason?: string } = { status: newStatus };
-    
+
     if (newStatus === 0 && deactivationReason) {
       body.reason = deactivationReason;
     }
-    
+
     try {
       await apiClient(`api/students/${selectedStudent._id}`, {
         method: "PUT",
@@ -258,8 +274,8 @@ export default function StudentsPage() {
 
   // --- DEFINICIÓN DE COLUMNAS PARA LA TABLA ---
   const columns: ColumnDef<Student>[] = [
-    { 
-      accessorKey: "studentCode", 
+    {
+      accessorKey: "studentCode",
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -272,8 +288,8 @@ export default function StudentsPage() {
       ),
       sortingFn: stringLocaleSort(),
     },
-    { 
-      accessorKey: "name", 
+    {
+      accessorKey: "name",
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -286,8 +302,8 @@ export default function StudentsPage() {
       ),
       sortingFn: stringLocaleSort(),
     },
-    { 
-      accessorKey: "email", 
+    {
+      accessorKey: "email",
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -300,8 +316,8 @@ export default function StudentsPage() {
       ),
       sortingFn: stringLocaleSort(),
     },
-    { 
-      accessorKey: "phone", 
+    {
+      accessorKey: "phone",
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -314,8 +330,8 @@ export default function StudentsPage() {
       ),
       sortingFn: stringLocaleSort(),
     },
-    { 
-      accessorKey: "status", 
+    {
+      accessorKey: "status",
       header: ({ column }) => (
         <Button
           variant="ghost"
@@ -329,15 +345,19 @@ export default function StudentsPage() {
       sortingFn: stringLocaleSort(),
       cell: ({ row }) => {
         const status = row.original.status;
-        const statusText = status === 1 ? "Active" : status === 0 ? "Inactive" : "Paused";
-        const statusClass = status === 1 
-          ? "bg-secondary/20 text-secondary"
-          : status === 0 
-          ? "bg-accent-1/20 text-accent-1"
-          : "bg-yellow-100 text-yellow-800";
-        
+        const statusText =
+          status === 1 ? "Active" : status === 0 ? "Inactive" : "Paused";
+        const statusClass =
+          status === 1
+            ? "bg-secondary/20 text-secondary"
+            : status === 0
+            ? "bg-accent-1/20 text-accent-1"
+            : "bg-yellow-100 text-yellow-800";
+
         return (
-          <span className={`px-2 py-1 rounded-full text-xs font-semibold ${statusClass}`}>
+          <span
+            className={`px-2 py-1 rounded-full text-xs font-semibold ${statusClass}`}
+          >
             {statusText}
           </span>
         );
@@ -501,7 +521,9 @@ export default function StudentsPage() {
                     <Label>Status</Label>
                     <Select
                       name="status"
-                      onValueChange={(v) => handleSelectChange("status", parseInt(v))}
+                      onValueChange={(v) =>
+                        handleSelectChange("status", parseInt(v))
+                      }
                       value={formData.status?.toString() || "1"}
                     >
                       <SelectTrigger>
@@ -669,7 +691,9 @@ export default function StudentsPage() {
                   Cancel
                 </Button>
                 <Button
-                  variant={selectedStudent.status === 1 ? "destructive" : "default"}
+                  variant={
+                    selectedStudent.status === 1 ? "destructive" : "default"
+                  }
                   className={
                     selectedStudent.status !== 1
                       ? "bg-secondary hover:bg-secondary/90 text-white"
@@ -692,16 +716,22 @@ export default function StudentsPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
                 <div>
                   <Label className="font-semibold">Student Code</Label>
-                  <p className="text-sm font-semibold">{selectedStudent.studentCode}</p>
+                  <p className="text-sm font-semibold">
+                    {selectedStudent.studentCode}
+                  </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Full Name</Label>
-                  <p className="text-sm font-semibold">{selectedStudent.name}</p>
+                  <p className="text-sm font-semibold">
+                    {selectedStudent.name}
+                  </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Date of Birth</Label>
                   <p className="text-sm">
-                    {selectedStudent.dob ? formatDateForDisplay(selectedStudent.dob) : "N/A"}
+                    {selectedStudent.dob
+                      ? formatDateForDisplay(selectedStudent.dob)
+                      : "N/A"}
                   </p>
                 </div>
                 <div>
@@ -710,11 +740,15 @@ export default function StudentsPage() {
                 </div>
                 <div>
                   <Label className="font-semibold">Representative</Label>
-                  <p className="text-sm">{selectedStudent.representativeName || "N/A"}</p>
+                  <p className="text-sm">
+                    {selectedStudent.representativeName || "N/A"}
+                  </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Occupation</Label>
-                  <p className="text-sm">{selectedStudent.occupation || "N/A"}</p>
+                  <p className="text-sm">
+                    {selectedStudent.occupation || "N/A"}
+                  </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Email</Label>
@@ -747,25 +781,38 @@ export default function StudentsPage() {
                         : "bg-yellow-100 text-yellow-800"
                     }`}
                   >
-                    {selectedStudent.status === 1 ? "Active" : selectedStudent.status === 0 ? "Inactive" : "Paused"}
+                    {selectedStudent.status === 1
+                      ? "Active"
+                      : selectedStudent.status === 0
+                      ? "Inactive"
+                      : "Paused"}
                   </span>
                 </div>
               </div>
-              
+
               {selectedStudent.notes && selectedStudent.notes.length > 0 && (
                 <div className="space-y-4">
                   <h3 className="text-lg font-medium">Notes</h3>
                   {selectedStudent.notes.map((note, index) => (
-                    <div key={note._id || index} className="border p-4 rounded-md">
+                    <div
+                      key={note._id || index}
+                      className="border p-4 rounded-md"
+                    >
                       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                         <div>
-                          <Label className="text-sm text-muted-foreground">Date</Label>
+                          <Label className="text-sm text-muted-foreground">
+                            Date
+                          </Label>
                           <p className="text-sm font-semibold">
-                            {note.date ? formatDateForDisplay(note.date) : "N/A"}
+                            {note.date
+                              ? formatDateForDisplay(note.date)
+                              : "N/A"}
                           </p>
                         </div>
                         <div className="md:col-span-2">
-                          <Label className="text-sm text-muted-foreground">Note</Label>
+                          <Label className="text-sm text-muted-foreground">
+                            Note
+                          </Label>
                           <p className="text-sm">{note.text}</p>
                         </div>
                       </div>
@@ -773,7 +820,7 @@ export default function StudentsPage() {
                   ))}
                 </div>
               )}
-              
+
               <DialogFooter className="pt-4 border-t">
                 <Button variant="outline" onClick={handleClose}>
                   Close

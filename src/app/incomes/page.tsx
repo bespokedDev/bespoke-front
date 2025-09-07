@@ -1,4 +1,5 @@
-/* eslint-disable @typescript-eslint/no-explicit-any */"use client";
+/* eslint-disable @typescript-eslint/no-explicit-any */
+"use client";
 import { useState, useEffect, useMemo } from "react";
 import { apiClient } from "@/lib/api";
 import { PageHeader } from "@/components/ui/page-header";
@@ -15,13 +16,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { DataTable } from "@/components/ui/data-table";
 import type { ColumnDef } from "@tanstack/react-table";
 import {
@@ -31,14 +25,18 @@ import {
   FileText,
   ArrowUpDown,
   ChevronsUpDown,
-  X,
   Pencil,
   Eye,
 } from "lucide-react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
-import { formatDateForDisplay, createDateSortingFunction, getCurrentDateString, dateStringToISO, extractDatePart } from "@/lib/dateUtils";
+import {
+  formatDateForDisplay,
+  getCurrentDateString,
+  dateStringToISO,
+  extractDatePart,
+} from "@/lib/dateUtils";
 import {
   Popover,
   PopoverContent,
@@ -257,7 +255,10 @@ export default function IncomesPage() {
     }
   };
 
-  const handleOpen = (type: "create" | "edit" | "delete" | "view", income?: Income) => {
+  const handleOpen = (
+    type: "create" | "edit" | "delete" | "view",
+    income?: Income
+  ) => {
     setDialogError(null);
     if (type === "create") {
       setSelectedIncome(null);
@@ -333,7 +334,7 @@ export default function IncomesPage() {
       };
 
       console.log("incomePayload", incomePayload);
-      
+
       if (openDialog === "create") {
         const response = await apiClient("api/incomes", {
           method: "POST",
@@ -377,7 +378,7 @@ export default function IncomesPage() {
     setIsSubmitting(true);
     setDialogError(null);
     try {
-      const response = await apiClient(`api/incomes/${selectedIncome._id}`, {
+      await apiClient(`api/incomes/${selectedIncome._id}`, {
         method: "DELETE",
       });
 
@@ -428,7 +429,15 @@ export default function IncomesPage() {
           </Button>
         ),
         accessorKey: "income_date",
-        sortingFn: createDateSortingFunction("income_date"),
+        sortingFn: (rowA: any, rowB: any) => {
+          const dateA = extractDatePart(
+            String(rowA.original.income_date || "")
+          );
+          const dateB = extractDatePart(
+            String(rowB.original.income_date || "")
+          );
+          return dateA.localeCompare(dateB);
+        },
         cell: ({ row }) => formatDateForDisplay(row.original.income_date),
       },
       {
@@ -618,7 +627,11 @@ export default function IncomesPage() {
     <div className="space-y-6">
       <PageHeader title="Incomes" subtitle="Manage all company incomes">
         <div className="flex gap-2">
-          <Button className="hover:bg-secondary/90" variant="outline" onClick={() => setIsSummaryModalOpen(true)}>
+          <Button
+            className="hover:bg-secondary/90"
+            variant="outline"
+            onClick={() => setIsSummaryModalOpen(true)}
+          >
             <FileText className="h-4 w-4 mr-2" />
             Summary Report
           </Button>
@@ -662,7 +675,11 @@ export default function IncomesPage() {
       )}
 
       <Dialog
-        open={openDialog === "create" || openDialog === "edit" || openDialog === "view"}
+        open={
+          openDialog === "create" ||
+          openDialog === "edit" ||
+          openDialog === "view"
+        }
         onOpenChange={(isOpen) => !isOpen && handleClose()}
       >
         <DialogContent className="sm:max-w-2xl">
@@ -678,165 +695,167 @@ export default function IncomesPage() {
               onSubmit={handleSubmit}
               className="space-y-4 max-h-[70vh] overflow-y-auto p-1 pr-4"
             >
-            <div className="space-y-2">
-              <Label>Income Date</Label>
-              <Input
-                name="income_date"
-                type="date"
-                value={formData.income_date}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, income_date: e.target.value }))
-                }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>
-                Deposit Name <span className="text-red-500">*</span>
-              </Label>
-              <Input
-                name="deposit_name"
-                value={formData.deposit_name}
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, deposit_name: e.target.value }))
-                }
-                required
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Income Date</Label>
+                <Input
+                  name="income_date"
+                  type="date"
+                  value={formData.income_date}
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, income_date: e.target.value }))
+                  }
+                />
+              </div>
               <div className="space-y-2">
                 <Label>
-                  Amount <span className="text-red-500">*</span>
+                  Deposit Name <span className="text-red-500">*</span>
                 </Label>
                 <Input
-                  name="amount"
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={formData.amount}
+                  name="deposit_name"
+                  value={formData.deposit_name}
                   onChange={(e) =>
-                    setFormData((p) => ({
-                      ...p,
-                      amount: Number(e.target.value),
-                    }))
+                    setFormData((p) => ({ ...p, deposit_name: e.target.value }))
                   }
                   required
                 />
               </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>
+                    Amount <span className="text-red-500">*</span>
+                  </Label>
+                  <Input
+                    name="amount"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={formData.amount}
+                    onChange={(e) =>
+                      setFormData((p) => ({
+                        ...p,
+                        amount: Number(e.target.value),
+                      }))
+                    }
+                    required
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>
+                    Currency <span className="text-red-500">*</span>
+                  </Label>
+                  <SearchableSelect
+                    items={divisas}
+                    selectedId={formData.idDivisa}
+                    onSelectedChange={(v) =>
+                      setFormData((p) => ({ ...p, idDivisa: v }))
+                    }
+                    placeholder="Select currency..."
+                  />
+                </div>
+              </div>
+              {/* Campos de tasa y conversión */}
+              {(() => {
+                const selectedDivisa = divisas.find(
+                  (d) => d._id === formData.idDivisa
+                );
+                const isDollar =
+                  selectedDivisa &&
+                  (selectedDivisa.name.toLowerCase() === "dollar" ||
+                    selectedDivisa.name.toLowerCase() === "dólar");
+
+                return !isDollar && selectedDivisa ? (
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label>
+                        Tasa de cambio ({selectedDivisa.name} → USD)
+                      </Label>
+                      <Input
+                        name="tasa"
+                        type="number"
+                        min="0.01"
+                        step="0.01"
+                        value={formData.tasa}
+                        onChange={(e) =>
+                          setFormData((p) => ({
+                            ...p,
+                            tasa: Number(parseFloat(e.target.value).toFixed(2)),
+                          }))
+                        }
+                        required
+                        placeholder="Ej: 35.50"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label>Monto en USD</Label>
+                      <Label className="text-lg">
+                        {amountInDollars.toFixed(2)}
+                      </Label>
+                    </div>
+                  </div>
+                ) : null;
+              })()}
               <div className="space-y-2">
-                <Label>
-                  Currency <span className="text-red-500">*</span>
-                </Label>
+                <Label>Professor</Label>
                 <SearchableSelect
-                  items={divisas}
-                  selectedId={formData.idDivisa}
+                  items={professors}
+                  selectedId={formData.idProfessor}
                   onSelectedChange={(v) =>
-                    setFormData((p) => ({ ...p, idDivisa: v }))
+                    setFormData((p) => ({ ...p, idProfessor: v }))
                   }
-                  placeholder="Select currency..."
+                  placeholder="Select a professor..."
                 />
               </div>
-            </div>
-            {/* Campos de tasa y conversión */}
-            {(() => {
-              const selectedDivisa = divisas.find(
-                (d) => d._id === formData.idDivisa
-              );
-              const isDollar =
-                selectedDivisa &&
-                (selectedDivisa.name.toLowerCase() === "dollar" ||
-                  selectedDivisa.name.toLowerCase() === "dólar");
-
-              return !isDollar && selectedDivisa ? (
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Tasa de cambio ({selectedDivisa.name} → USD)</Label>
-                    <Input
-                      name="tasa"
-                      type="number"
-                      min="0.01"
-                      step="0.01"
-                      value={formData.tasa}
-                      onChange={(e) =>
-                        setFormData((p) => ({
-                          ...p,
-                          tasa: Number(parseFloat(e.target.value).toFixed(2)),
-                        }))
-                      }
-                      required
-                      placeholder="Ej: 35.50"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Monto en USD</Label>
-                    <Label className="text-lg">
-                      {amountInDollars.toFixed(2)}
-                    </Label>
-                  </div>
-                </div>
-              ) : null;
-            })()}
-            <div className="space-y-2">
-              <Label>Professor</Label>
-              <SearchableSelect
-                items={professors}
-                selectedId={formData.idProfessor}
-                onSelectedChange={(v) =>
-                  setFormData((p) => ({ ...p, idProfessor: v }))
-                }
-                placeholder="Select a professor..."
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Enrollment</Label>
-              <SearchableEnrollmentSelect
-                enrollments={filteredEnrollmentsForForm}
-                selectedId={formData.idEnrollment}
-                onSelectedChange={(v) =>
-                  setFormData((p) => ({ ...p, idEnrollment: v }))
-                }
-                placeholder="Select an enrollment..."
-                disabled={!formData.idProfessor}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>
-                Payment Method <span className="text-red-500">*</span>
-              </Label>
-              <SearchableSelect
-                items={paymentMethods}
-                selectedId={formData.idPaymentMethod}
-                onSelectedChange={(v) =>
-                  setFormData((p) => ({ ...p, idPaymentMethod: v }))
-                }
-                placeholder="Select payment method..."
-              />
-            </div>
-            <div className="space-y-2">
-              <Label>Note</Label>
-              <Textarea
-                name="note"
-                onChange={(e) =>
-                  setFormData((p) => ({ ...p, note: e.target.value }))
-                }
-                placeholder="e.g., Payment for 4 advanced English classes..."
-              />
-            </div>
-            <div className="text-sm text-muted-foreground">
-              <span className="text-red-500">*</span> Campos obligatorios
-            </div>
-            <DialogFooter className="pt-4 border-t">
-              <p className="text-sm text-accent-1 mr-auto">{dialogError}</p>
-              <Button type="button" variant="outline" onClick={handleClose}>
-                Cancel
-              </Button>
-              <Button type="submit" disabled={isSubmitting}>
-                {isSubmitting && (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                )}
-                Register Income
-              </Button>
-            </DialogFooter>
-          </form>
+              <div className="space-y-2">
+                <Label>Enrollment</Label>
+                <SearchableEnrollmentSelect
+                  enrollments={filteredEnrollmentsForForm}
+                  selectedId={formData.idEnrollment}
+                  onSelectedChange={(v) =>
+                    setFormData((p) => ({ ...p, idEnrollment: v }))
+                  }
+                  placeholder="Select an enrollment..."
+                  disabled={!formData.idProfessor}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>
+                  Payment Method <span className="text-red-500">*</span>
+                </Label>
+                <SearchableSelect
+                  items={paymentMethods}
+                  selectedId={formData.idPaymentMethod}
+                  onSelectedChange={(v) =>
+                    setFormData((p) => ({ ...p, idPaymentMethod: v }))
+                  }
+                  placeholder="Select payment method..."
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Note</Label>
+                <Textarea
+                  name="note"
+                  onChange={(e) =>
+                    setFormData((p) => ({ ...p, note: e.target.value }))
+                  }
+                  placeholder="e.g., Payment for 4 advanced English classes..."
+                />
+              </div>
+              <div className="text-sm text-muted-foreground">
+                <span className="text-red-500">*</span> Campos obligatorios
+              </div>
+              <DialogFooter className="pt-4 border-t">
+                <p className="text-sm text-accent-1 mr-auto">{dialogError}</p>
+                <Button type="button" variant="outline" onClick={handleClose}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={isSubmitting}>
+                  {isSubmitting && (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  )}
+                  Register Income
+                </Button>
+              </DialogFooter>
+            </form>
           )}
 
           {openDialog === "view" && selectedIncome && (
@@ -844,43 +863,64 @@ export default function IncomesPage() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4">
                 <div>
                   <Label className="font-semibold">Deposit Name</Label>
-                  <p className="text-sm font-semibold">{selectedIncome.deposit_name}</p>
+                  <p className="text-sm font-semibold">
+                    {selectedIncome.deposit_name}
+                  </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Income Date</Label>
-                  <p className="text-sm">{formatDateForDisplay(selectedIncome.income_date)}</p>
+                  <p className="text-sm">
+                    {formatDateForDisplay(selectedIncome.income_date)}
+                  </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Amount</Label>
-                  <p className="text-sm font-semibold">${(selectedIncome.amount || 0).toFixed(2)}</p>
+                  <p className="text-sm font-semibold">
+                    ${(selectedIncome.amount || 0).toFixed(2)}
+                  </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Amount in Dollars</Label>
-                  <p className="text-sm font-semibold">${(selectedIncome.amountInDollars || 0).toFixed(2)}</p>
+                  <p className="text-sm font-semibold">
+                    ${(selectedIncome.amountInDollars || 0).toFixed(2)}
+                  </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Exchange Rate</Label>
-                  <p className="text-sm">{(selectedIncome.tasa || 1).toFixed(2)}</p>
+                  <p className="text-sm">
+                    {(selectedIncome.tasa || 1).toFixed(2)}
+                  </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Currency</Label>
-                  <p className="text-sm">{selectedIncome.idDivisa?.name || "N/A"}</p>
+                  <p className="text-sm">
+                    {selectedIncome.idDivisa?.name || "N/A"}
+                  </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Professor</Label>
-                  <p className="text-sm">{selectedIncome.idProfessor?.name || "N/A"}</p>
+                  <p className="text-sm">
+                    {selectedIncome.idProfessor?.name || "N/A"}
+                  </p>
                 </div>
                 <div>
                   <Label className="font-semibold">Payment Method</Label>
-                  <p className="text-sm">{selectedIncome.idPaymentMethod?.name || "N/A"}</p>
+                  <p className="text-sm">
+                    {selectedIncome.idPaymentMethod?.name || "N/A"}
+                  </p>
                 </div>
                 <div className="md:col-span-2">
                   <Label className="font-semibold">Enrollment</Label>
                   <p className="text-sm">
-                    {selectedIncome.idEnrollment ? 
-                      `${selectedIncome.idEnrollment.planId?.name || "N/A"} - ${selectedIncome.idEnrollment.studentIds?.map(s => s.name).join(", ") || "N/A"}` 
-                      : "N/A"
-                    }
+                    {selectedIncome.idEnrollment
+                      ? `${
+                          selectedIncome.idEnrollment.planId?.name || "N/A"
+                        } - ${
+                          selectedIncome.idEnrollment.studentIds
+                            ?.map((s) => s.name)
+                            .join(", ") || "N/A"
+                        }`
+                      : "N/A"}
                   </p>
                 </div>
                 <div className="md:col-span-2">

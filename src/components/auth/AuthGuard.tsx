@@ -1,15 +1,18 @@
 // En: components/auth/AuthGuard.tsx
+"use client";
 
-'use client';
-
-import { useAuth } from '@/contexts/AuthContext';
-import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
-import { Loader2 } from 'lucide-react';
-import { apiClient } from '@/lib/api'; // Importamos el apiClient
+import { useAuth } from "@/contexts/AuthContext";
+import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { Loader2 } from "lucide-react";
+import { apiClient } from "@/lib/api"; // Importamos el apiClient
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {
-  const { isAuthenticated, isLoading: isAuthContextLoading, logout } = useAuth();
+  const {
+    isAuthenticated,
+    isLoading: isAuthContextLoading,
+    logout,
+  } = useAuth();
   const [isVerifying, setIsVerifying] = useState(true);
   const router = useRouter();
 
@@ -23,7 +26,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     if (!isAuthenticated) {
       // Si el contexto ya sabe que no hay autenticación, redirigimos.
       setIsVerifying(false);
-      router.push('/login');
+      router.push("/login");
       return;
     }
 
@@ -33,7 +36,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     const verifyToken = async () => {
       try {
         // Usamos una llamada que sabemos que debe funcionar si estamos logueados.
-        await apiClient('api/professors?limit=1'); 
+        await apiClient("api/professors?limit=1");
         console.log("[AuthGuard] Verificación de token exitosa.");
         setIsVerifying(false);
       } catch (error) {
@@ -44,7 +47,6 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
     };
 
     verifyToken();
-
   }, [isAuthContextLoading, isAuthenticated, router, logout]);
 
   // Mostramos el loader mientras el contexto carga O mientras verificamos el token.

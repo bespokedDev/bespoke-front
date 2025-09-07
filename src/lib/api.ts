@@ -1,5 +1,4 @@
 // En: lib/api.ts
-
 const API_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 if (!API_URL) {
@@ -9,29 +8,33 @@ if (!API_URL) {
 const handleLogout = () => {
   // Esta función centraliza el cierre de sesión para ser llamada desde cualquier lugar.
   console.log("[Auth] Token inválido o sesión expirada. Cerrando sesión...");
-  localStorage.removeItem('authToken');
-  localStorage.removeItem('user');
-  document.cookie = 'authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;';
+  localStorage.removeItem("authToken");
+  localStorage.removeItem("user");
+  document.cookie =
+    "authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
   // Redirigimos forzosamente al login
-  if (typeof window !== 'undefined') {
-    window.location.href = '/login';
+  if (typeof window !== "undefined") {
+    window.location.href = "/login";
   }
 };
 
 const getAuthToken = (): string | null => {
-  if (typeof window !== 'undefined') {
-    return localStorage.getItem('authToken');
+  if (typeof window !== "undefined") {
+    return localStorage.getItem("authToken");
   }
   return null;
 };
 
-export const apiClient = async (endpoint: string, options: RequestInit = {}) => {
+export const apiClient = async (
+  endpoint: string,
+  options: RequestInit = {}
+) => {
   const token = getAuthToken();
   const headers = new Headers(options.headers || {});
-  headers.append('Content-Type', 'application/json');
+  headers.append("Content-Type", "application/json");
 
   if (token) {
-    headers.append('Authorization', `Bearer ${token}`);
+    headers.append("Authorization", `Bearer ${token}`);
   }
 
   const config: RequestInit = { ...options, headers };
@@ -45,19 +48,23 @@ export const apiClient = async (endpoint: string, options: RequestInit = {}) => 
     if (response.status === 401 || response.status === 403) {
       handleLogout();
       // Devolvemos una promesa que nunca se resuelve para detener la cadena.
-      return new Promise(() => {}); 
+      return new Promise(() => {});
     }
 
     if (!response.ok) {
-      const errorData = await response.json().catch(() => ({ message: response.statusText }));
-      throw new Error(errorData.message || `API request failed with status ${response.status}`);
+      const errorData = await response
+        .json()
+        .catch(() => ({ message: response.statusText }));
+      throw new Error(
+        errorData.message || `API request failed with status ${response.status}`
+      );
     }
 
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
       return response.json();
     }
-    
+
     return response;
   } catch (error) {
     console.error(`[apiClient] Error fetching ${fullUrl}:`, error);

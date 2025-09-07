@@ -1,5 +1,4 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
 export function AssignmentsTable() {
   return (
     <Card>
