@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/select";
 import { DataTable } from "@/components/ui/data-table";
 import type { ColumnDef } from "@tanstack/react-table";
+import { normalizeText } from "@/lib/utils";
 import {
   Plus,
   Ban,
@@ -293,24 +294,23 @@ export default function PayoutsPage() {
 
   // Filtrar payouts basado en el término de búsqueda
   const filteredPayouts = useMemo(() => {
-    if (!searchTerm.trim()) return payouts;
-
-    const term = searchTerm.toLowerCase().trim();
+    const normalizedTerm = normalizeText(searchTerm.trim());
+    if (!normalizedTerm) return payouts;
 
     return payouts.filter((payout) => {
-      // Buscar por profesor
-      const professorMatch = payout.professorId?.name
-        ?.toLowerCase()
-        .includes(term);
+      const professorMatch = normalizeText(payout.professorId?.name ?? "").includes(
+        normalizedTerm
+      );
 
-      // Buscar por mes
-      const monthMatch = payout.month?.toLowerCase().includes(term);
+      const monthMatch = normalizeText(payout.month ?? "").includes(normalizedTerm);
 
-      // Buscar por total pagado
-      const totalMatch = payout.total?.toString().includes(term);
+      const totalMatch = normalizeText(payout.total?.toString() ?? "").includes(
+        normalizedTerm
+      );
 
-      // Buscar por fecha de pago
-      const paidAtMatch = formatDateForDisplay(payout.paidAt).includes(term);
+      const paidAtMatch = normalizeText(
+        formatDateForDisplay(payout.paidAt)
+      ).includes(normalizedTerm);
 
       return professorMatch || monthMatch || totalMatch || paidAtMatch;
     });

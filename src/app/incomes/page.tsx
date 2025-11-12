@@ -134,6 +134,15 @@ const initialIncomeState: IncomeFormData = {
   idEnrollment: "",
 };
 
+const isEnrollmentStatusActive = (status: EnrollmentBrief["status"]) => {
+  if (status === undefined || status === null) {
+    return false;
+  }
+
+  const normalized = status.toString().trim().toLowerCase();
+  return normalized === "1" || normalized === "active";
+};
+
 // --- COMPONENTE PRINCIPAL ---
 export default function IncomesPage() {
   const [incomes, setIncomes] = useState<Income[]>([]);
@@ -468,12 +477,15 @@ export default function IncomesPage() {
             <ArrowUpDown className="h-4 w-4" />
           </Button>
         ),
-        accessorKey: "idEnrollment.studentIds",
+        accessorFn: (row) =>
+          row.idEnrollment?.studentIds
+            ?.map((student) => student.name)
+            .join(", ") || "",
         sortingFn: stringLocaleSort(),
-        cell: ({ row }) =>
-          row.original.idEnrollment?.studentIds
-            ?.map((s) => s.name)
-            .join(", ") || "N/A",
+        cell: ({ getValue }) => {
+          const formatted = getValue<string>();
+          return formatted || "N/A";
+        },
       },
       {
         id: "professor",
@@ -587,8 +599,11 @@ export default function IncomesPage() {
     if (!formData.idProfessor) {
       return [];
     }
+
     return enrollments.filter(
-      (enrollment) => enrollment.professorId?._id === formData.idProfessor
+      (enrollment) =>
+        enrollment.professorId?._id === formData.idProfessor &&
+        isEnrollmentStatusActive(enrollment.status)
     );
   }, [enrollments, formData.idProfessor]);
 
@@ -659,14 +674,14 @@ export default function IncomesPage() {
               columns={columns}
               data={incomes}
               searchKeys={[
+                "date",
                 "deposit_name",
-                "idProfessor.name",
-                "idEnrollment.studentIds",
-                "idPaymentMethod.name",
-                "note",
-                "income_date",
+                "student",
+                "professor",
+                "paymentMethod",
                 "amount",
                 "amountInDollars",
+                "note",
               ]}
               searchPlaceholder="Search incomes..."
             />

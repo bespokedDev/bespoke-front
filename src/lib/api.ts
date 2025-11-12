@@ -1,54 +1,79 @@
-// En: lib/api.ts
 const API_URL = process.env.NEXT_PUBLIC_API_BASE_URL;
 
 if (!API_URL) {
-  throw new Error("FATAL ERROR: NEXT_PUBLIC_API_URL is not defined.");
+  throw new Error(
+    "FATAL ERROR: NEXT_PUBLIC_API_BASE_URL environment variable is not defined."
+  );
 }
 
-const handleLogout = () => {
-  // Esta función centraliza el cierre de sesión para ser llamada desde cualquier lugar.
-  console.log("[Auth] Token inválido o sesión expirada. Cerrando sesión...");
-  localStorage.removeItem("authToken");
-  localStorage.removeItem("user");
+const clearBrowserSession = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  console.log("[Auth] Invalid token detected. Clearing browser session.");
+  window.localStorage.removeItem("authToken");
+  window.localStorage.removeItem("user");
   document.cookie =
     "authToken=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT;";
-  // Redirigimos forzosamente al login
-  if (typeof window !== "undefined") {
-    window.location.href = "/login";
+};
+
+const resolveBrowserToken = () => {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    return window.localStorage.getItem("authToken");
+  } catch (error) {
+    console.warn("[apiClient] Unable to read auth token from localStorage.", error);
+    return null;
   }
 };
 
-const getAuthToken = (): string | null => {
-  if (typeof window !== "undefined") {
-    return localStorage.getItem("authToken");
-  }
-  return null;
+type ApiClientOptions = RequestInit & {
+  token?: string | null;
+  skipContentTypeHeader?: boolean;
+  onUnauthorized?: () => void;
 };
 
 export const apiClient = async (
   endpoint: string,
-  options: RequestInit = {}
+  {
+    token,
+    skipContentTypeHeader,
+    onUnauthorized,
+    ...requestInit
+  }: ApiClientOptions = {}
 ) => {
-  const token = getAuthToken();
-  const headers = new Headers(options.headers || {});
-  headers.append("Content-Type", "application/json");
+  const headers = new Headers(requestInit.headers);
 
-  if (token) {
-    headers.append("Authorization", `Bearer ${token}`);
+  if (!skipContentTypeHeader && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
   }
 
-  const config: RequestInit = { ...options, headers };
+  const authToken = token ?? resolveBrowserToken();
+  if (authToken) {
+    headers.set("Authorization", `Bearer ${authToken}`);
+  }
+
+  const requestConfig: RequestInit = {
+    ...requestInit,
+    headers,
+  };
+
   const fullUrl = `${API_URL}${endpoint}`;
 
   try {
-    const response = await fetch(fullUrl, config);
+    const response = await fetch(fullUrl, requestConfig);
 
-    // --- ¡VERIFICACIÓN ACTIVA AQUÍ! ---
-    // Si la API nos dice que no estamos autorizados, cerramos sesión.
     if (response.status === 401 || response.status === 403) {
-      handleLogout();
-      // Devolvemos una promesa que nunca se resuelve para detener la cadena.
-      return new Promise(() => {});
+      if (typeof window !== "undefined") {
+        clearBrowserSession();
+        window.location.href = "/login";
+      }
+      onUnauthorized?.();
+      throw new Error("Unauthorized request");
     }
 
     if (!response.ok) {
@@ -56,7 +81,8 @@ export const apiClient = async (
         .json()
         .catch(() => ({ message: response.statusText }));
       throw new Error(
-        errorData.message || `API request failed with status ${response.status}`
+        errorData.message ||
+          `API request failed with status ${response.status}`
       );
     }
 
@@ -68,8 +94,6 @@ export const apiClient = async (
     return response;
   } catch (error) {
     console.error(`[apiClient] Error fetching ${fullUrl}:`, error);
-    // Si la API está apagada, el fetch fallará. Aquí podríamos decidir qué hacer.
-    // Por ahora, relanzamos el error para que el componente lo maneje.
     throw error;
   }
 };

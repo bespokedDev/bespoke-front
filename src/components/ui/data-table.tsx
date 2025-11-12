@@ -29,6 +29,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { normalizeText } from "@/lib/utils";
 
 interface DataTableProps<TData, TValue> {
   columns: ColumnDef<TData, TValue>[];
@@ -68,16 +69,14 @@ export function DataTable<TData, TValue>({
         const searchableText = searchKeys
           .map((key) => {
             const value = row.getValue(key);
-            console.log(`Searching in key "${key}":`, value); // Debug
             return value ? String(value) : "";
           })
-          .join(" ")
-          .toLowerCase();
-        
-        console.log('Final searchable text:', searchableText); // Debug
-        console.log('Filter value:', filterValue.toLowerCase()); // Debug
-        
-        return searchableText.includes(filterValue.toLowerCase());
+          .join(" ");
+
+        const normalizedText = normalizeText(searchableText);
+        const normalizedFilter = normalizeText(filterValue);
+
+        return normalizedText.includes(normalizedFilter);
       }
       
       // Si no hay searchKeys específicos, retornamos true (sin filtro)

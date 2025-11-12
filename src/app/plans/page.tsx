@@ -336,27 +336,27 @@ export default function PlansPage() {
         </span>
       ),
     },
-    {
-      accessorKey: "pricing",
-      header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-          className="flex items-center gap-1"
-        >
-          Pricing
-          <ArrowUpDown className="h-4 w-4" />
-        </Button>
-      ),
-      sortingFn: stringLocaleSort(),
-      cell: ({ row }) => (
-        <div className="text-sm">
-          <div>Single: ${row.original.pricing.single}</div>
-          <div>Couple: ${row.original.pricing.couple}</div>
-          <div>Group: ${row.original.pricing.group}</div>
-        </div>
-      ),
-    },
+      {
+        accessorKey: "pricing",
+        header: ({ column }) => (
+          <Button
+            variant="ghost"
+            onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
+            className="flex items-center gap-1"
+          >
+            Pricing (per person)
+            <ArrowUpDown className="h-4 w-4" />
+          </Button>
+        ),
+        sortingFn: stringLocaleSort(),
+        cell: ({ row }) => (
+          <div className="text-sm">
+            <div>Single: ${row.original.pricing.single}</div>
+            <div>Couple: ${row.original.pricing.couple}</div>
+            <div>Group: ${row.original.pricing.group}</div>
+          </div>
+        ),
+      },
     {
       accessorKey: "isActive",
       header: ({ column }) => (
@@ -529,7 +529,7 @@ export default function PlansPage() {
 
               <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="singlePrice">Single Price *</Label>
+                  <Label htmlFor="singlePrice">Single Price (per person) *</Label>
                   <Input
                     id="singlePrice"
                     name="singlePrice"
@@ -546,7 +546,7 @@ export default function PlansPage() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="couplePrice">Couple Price *</Label>
+                  <Label htmlFor="couplePrice">Couple Price (per person) *</Label>
                   <Input
                     id="couplePrice"
                     name="couplePrice"
@@ -563,7 +563,7 @@ export default function PlansPage() {
                   )}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="groupPrice">Group Price *</Label>
+                  <Label htmlFor="groupPrice">Group Price (per person) *</Label>
                   <Input
                     id="groupPrice"
                     name="groupPrice"
@@ -617,14 +617,14 @@ export default function PlansPage() {
                   <Label className="text-sm font-semibold">Description</Label>
                   <p className="text-sm">{selectedPlan.description}</p>
                 </div>
-                <div>
-                  <Label className="text-sm font-semibold">Pricing</Label>
-                  <div className="text-sm space-y-1">
-                    <p>Single: ${selectedPlan.pricing.single}</p>
-                    <p>Couple: ${selectedPlan.pricing.couple}</p>
-                    <p>Group: ${selectedPlan.pricing.group}</p>
-                  </div>
+              <div>
+                <Label className="text-sm font-semibold">Pricing (per person)</Label>
+                <div className="text-sm space-y-1">
+                  <p>Single: ${selectedPlan.pricing.single} per person</p>
+                  <p>Couple: ${selectedPlan.pricing.couple} per person</p>
+                  <p>Group: ${selectedPlan.pricing.group} per person</p>
                 </div>
+              </div>
                 <div>
                   <Label className="text-sm font-semibold">Status</Label>
                   <span

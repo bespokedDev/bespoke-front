@@ -1,4 +1,3 @@
-"use client";
 import { SummaryCard } from "@/components/dashboard/SummaryCard";
 import { AnalyticsChart } from "@/components/dashboard/AnalyticsChart";
 import { AssignmentsTable } from "@/components/dashboard/AssignmentsTable";
